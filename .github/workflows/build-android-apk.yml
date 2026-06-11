@@ -3,13 +3,11 @@ name: Build Android APK
 # Wraps the live PWA into an Android app (Trusted Web Activity) using Bubblewrap
 # and uploads the installable APK as a downloadable artifact.
 #
-# Run it manually: Actions tab → "Build Android APK" → Run workflow.
-# When it finishes, open the run → Artifacts → download "ps-recommender-apk",
-# unzip, and sideload the .apk on your Android phone.
-#
-# Note: this produces a self-signed APK for sideloading/review (Android will ask
-# you to allow "install from unknown sources"). The app renders the real website
-# in Chrome, so screenshots/cover art are full quality.
+# Runs automatically when the Android config changes, or manually:
+# Actions tab → "Build Android APK" → Run workflow. When it finishes, open the
+# run → Artifacts → download "ps-recommender-apk", unzip, and sideload the .apk
+# (you'll allow "install from unknown sources"). The app renders the real
+# website in Chrome, so screenshots/cover art are full quality.
 
 on:
   workflow_dispatch:
@@ -40,16 +38,23 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli@latest
 
-      - name: Point Bubblewrap at the runner's pre-installed JDK & Android SDK
+      - name: Configure Bubblewrap (point at the runner's JDK & Android SDK)
         run: |
           mkdir -p "$HOME/.bubblewrap"
-          cat > "$HOME/.bubblewrap/config.json" <<EOF
-          { "jdkPath": "${JAVA_HOME}", "androidSdkPath": "${ANDROID_SDK_ROOT}" }
-          EOF
-          yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          printf '{ "jdkPath": "%s", "androidSdkPath": "%s" }\n' "$JAVA_HOME" "$ANDROID_SDK_ROOT" > "$HOME/.bubblewrap/config.json"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          cat "$HOME/.bubblewrap/config.json"
+          ls "$ANDROID_SDK_ROOT"
 
       - name: Generate a signing key
         working-directory: android
@@ -67,7 +72,9 @@ jobs:
           BUBBLEWRAP_KEYSTORE_PASSWORD: psrecommender
           BUBBLEWRAP_KEY_PASSWORD: psrecommender
         run: |
+          bubblewrap doctor || true
           bubblewrap build --skipPwaValidation
+          echo "--- build output ---"
           ls -la
 
       - name: Upload APK
@@ -75,6 +82,6 @@ jobs:
         with:
           name: ps-recommender-apk
           path: |
-            android/app-release-signed.apk
-            android/app-release-unsigned.apk
+            android/*.apk
+            android/app-release-bundle.aab
           if-no-files-found: warn
