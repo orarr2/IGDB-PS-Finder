@@ -44,8 +44,8 @@ jobs:
 
       - name: Compute embeddings and neighbours
         env:
-          SUPABASE_URL: https://zttqvoqpwtxchxsglard.supabase.co
-          SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0dHF2b3Fwd3R4Y2h4c2dsYXJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDk0NzQsImV4cCI6MjA5NjY4NTQ3NH0.CU2rcRgQtGcHmwY6thpf-NNKLnb-WtJzzj8WrzxO3Qo
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SHOTS: "3"
           TOPK: "12"
           LIMIT: ${{ github.event.inputs.limit || '0' }}
