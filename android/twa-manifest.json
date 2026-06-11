@@ -13,6 +13,8 @@
   "navigationDividerColorDark": "#0a0e1a",
   "backgroundColor": "#0a0e1a",
   "enableNotifications": false,
+  "splashScreenFadeOutDuration": 300,
+  "generatorApp": "bubblewrap-cli",
   "startUrl": "/IGDB-PlayStation-Games-recommendations-by-cover-photos-with-gradient-boosting/docs/index.html",
   "iconUrl": "https://orarr2.github.io/IGDB-PlayStation-Games-recommendations-by-cover-photos-with-gradient-boosting/docs/icons/icon-512.png",
   "maskableIconUrl": "https://orarr2.github.io/IGDB-PlayStation-Games-recommendations-by-cover-photos-with-gradient-boosting/docs/icons/icon-512-maskable.png",
