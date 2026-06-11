@@ -93,6 +93,7 @@ def export_onnx(model, path="docs/models/mobilenet_v3_small.onnx"):
         input_names=["input"], output_names=["embedding"],
         dynamic_axes={"input": {0: "batch"}, "embedding": {0: "batch"}},
         opset_version=17,
+        dynamo=False,  # legacy exporter → single self-contained .onnx (no .data)
     )
     log("Exported ONNX model →", path, f"({os.path.getsize(path)//1024} KB)")
 
