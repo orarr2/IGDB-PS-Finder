@@ -266,7 +266,7 @@
     // Player captures (Steam Community + Reddit) — links only, loaded async.
     var pcSec = el("div", "section");
     pcSec.hidden = true;
-    pcSec.appendChild(el("h3", "section-h", "📸 Player captures · Steam & Reddit"));
+    pcSec.appendChild(el("h3", "section-h", "📸 Player captures · Steam Community"));
     var pcStrip = el("div", "gallery");
     pcSec.appendChild(pcStrip);
     body.appendChild(pcSec);

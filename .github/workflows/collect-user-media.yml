@@ -10,18 +10,12 @@ name: Collect player media
 
 on:
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "pilot or all"
-        default: "pilot"
-      pilot_n:
-        description: "games in pilot"
-        default: "30"
   push:
     branches:
       - claude/github-project-ios-app-jfyprv
     paths:
       - "ml/collect_user_media.py"
+      - "ml/pilot_games.json"
       - ".github/workflows/collect-user-media.yml"
 
 permissions:
@@ -37,12 +31,9 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install requests
-      - name: Collect links
+      - name: Collect links (Steam, from the curated pilot list)
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          MODE: ${{ github.event.inputs.mode || 'pilot' }}
-          PILOT_N: ${{ github.event.inputs.pilot_n || '30' }}
+          GAMES_FILE: ml/pilot_games.json
           PER_GAME: "4"
         run: python ml/collect_user_media.py
       - name: Commit results

@@ -1,21 +1,21 @@
-"""Collect *player-captured* in-game images (links only) from Steam & Reddit.
+"""Collect *player-captured* in-game screenshots (links only) from Steam.
 
-For each game we:
-  - resolve a Steam appid (Steam storefront search) and scrape a few top
-    community screenshots (genuine player uploads), and
-  - search Reddit for image posts mentioning the game,
-storing only the image URL + attribution (author, permalink) — never the file
-itself. Output -> ml/user_media.json, later loaded into public.user_media.
+For each game we resolve a Steam appid (storefront search), pull the top
+community screenshots via Steam's screenshot AJAX endpoint, and read each
+screenshot's full-resolution image URL from its details page. We store only the
+image URL + source link (attribution) — never the file itself.
 
-This is a personal/research-scale collector: it rate-limits politely, keeps a
-small number of items per game, and records source links for attribution.
+Output -> ml/user_media.json, later loaded into public.user_media.
+
+Game list source (in priority order):
+  - GAMES_FILE env (a JSON array of {id,name}); default ml/pilot_games.json
+  - else Supabase REST (needs SUPABASE_URL / SUPABASE_KEY), most-reviewed first
 
 Env:
-  SUPABASE_URL, SUPABASE_KEY     (anon; read game list)
-  MODE        'pilot' | 'all'    (default pilot)
-  PILOT_N     games in pilot     (default 30, most-reviewed first)
-  PER_GAME    images per source  (default 4)
-  OUT         output path        (default ml/user_media.json)
+  GAMES_FILE   path to a JSON [{id,name}]   (default ml/pilot_games.json)
+  PER_GAME     screenshots per game         (default 4)
+  MODE/PILOT_N used only for the Supabase path
+  OUT          output path                  (default ml/user_media.json)
 """
 
 from __future__ import annotations
@@ -28,40 +28,39 @@ import time
 
 import requests
 
-SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
-SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-MODE = os.environ.get("MODE", "pilot")
-PILOT_N = int(os.environ.get("PILOT_N", "30"))
 PER_GAME = int(os.environ.get("PER_GAME", "4"))
 OUT = os.environ.get("OUT", "ml/user_media.json")
+GAMES_FILE = os.environ.get("GAMES_FILE", "ml/pilot_games.json")
 
-UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
 S = requests.Session()
-S.headers.update({"User-Agent": UA})
+S.headers.update({"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9"})
 
-STEAM_IMG = re.compile(r'https://steamuserimages-a\.akamaihd\.net/ugc/[0-9A-Za-z/_\-]+(?:/[0-9A-Za-z/_\-]+)?')
-STEAM_FILE = re.compile(r'https://steamcommunity\.com/sharedfiles/filedetails/\?id=\d+')
+FILEDETAILS = re.compile(r'https://steamcommunity\.com/sharedfiles/filedetails/\?id=\d+')
+# full-resolution screenshot URLs live on the details page's og:image
+OG_IMAGE = re.compile(r'<meta property="og:image"\s+content="([^"]+)"')
+# the user/profile that posted it
+AUTHOR = re.compile(r'<div class="creatorsBlock">.*?<div class="friendBlockContent">\s*([^<\r\n]+)',
+                    re.S)
 
 
 def log(*a):
     print(*a, flush=True)
 
 
-def fetch_games():
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-    sel = "select=id,name,total_rating_count&order=total_rating_count.desc.nullslast"
-    if MODE == "pilot":
-        url = f"{SUPABASE_URL}/rest/v1/games?{sel}&limit={PILOT_N}"
-        return S.get(url, headers=headers, timeout=60).json()
-    out, off = [], 0
-    while True:
-        url = f"{SUPABASE_URL}/rest/v1/games?{sel}&limit=1000&offset={off}"
-        rows = S.get(url, headers=headers, timeout=60).json()
-        out.extend(rows)
-        if len(rows) < 1000:
-            break
-        off += 1000
-    return out
+def load_games():
+    if GAMES_FILE and os.path.exists(GAMES_FILE):
+        return json.load(open(GAMES_FILE))
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_KEY", "")
+    if not url or not key:
+        log("No GAMES_FILE and no Supabase creds — nothing to do.")
+        return []
+    n = int(os.environ.get("PILOT_N", "30"))
+    headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+    sel = "select=id,name&order=total_rating_count.desc.nullslast&limit=" + str(n)
+    return S.get(f"{url}/rest/v1/games?{sel}", headers=headers, timeout=60).json()
 
 
 def norm(s: str) -> str:
@@ -73,112 +72,103 @@ def steam_appid(name: str):
         r = S.get("https://store.steampowered.com/api/storesearch/",
                   params={"term": name, "cc": "us", "l": "en"}, timeout=20)
         items = r.json().get("items", [])
-        target = norm(name)
-        for it in items:                       # prefer an exact-ish title match
-            if norm(it.get("name", "")) == target:
-                return it["id"]
-        return items[0]["id"] if items else None
-    except Exception:
+    except Exception as e:
+        log("   storesearch error:", e)
         return None
+    if not items:
+        return None
+    target = norm(name)
+    for it in items:
+        if norm(it.get("name", "")) == target:
+            return it["id"], it["name"]
+    # fall back to the first hit only if it shares the leading word
+    first = items[0]
+    if norm(first.get("name", "")).startswith(target[:6]) or target.startswith(norm(first.get("name", ""))[:6]):
+        return first["id"], first.get("name")
+    return None
+
+
+def screenshot_ids(appid: int):
+    """Top community screenshots via the homecontent AJAX endpoint."""
+    url = (f"https://steamcommunity.com/app/{appid}/homecontent/"
+           f"?userreviewsoffset=0&p=1&screenshotspage=1&numperpage=12"
+           f"&browsefilter=toprated&appHubSubSection=2&l=english"
+           f"&appid={appid}&forceanon=1")
+    try:
+        html = S.get(url, timeout=25).text
+    except Exception as e:
+        log("   homecontent error:", e)
+        return []
+    seen, out = set(), []
+    for m in FILEDETAILS.findall(html):
+        if m not in seen:
+            seen.add(m)
+            out.append(m)
+    return out
+
+
+def full_image(filedetails_url: str):
+    try:
+        html = S.get(filedetails_url + "&l=english", timeout=20).text
+    except Exception:
+        return None, None
+    img = OG_IMAGE.search(html)
+    if not img:
+        return None, None
+    url = img.group(1).split("?")[0]  # strip sizing query for full res
+    auth = AUTHOR.search(html)
+    return url, (auth.group(1).strip() if auth else "Steam player")
 
 
 def steam_screenshots(appid: int, n: int):
-    try:
-        url = (f"https://steamcommunity.com/app/{appid}/screenshots/"
-               f"?p=1&browsefilter=toprated&l=english")
-        html = S.get(url, timeout=25).text
-    except Exception:
-        return []
-    imgs = STEAM_IMG.findall(html)
-    files = STEAM_FILE.findall(html)
-    out, seen = [], set()
-    for i, img in enumerate(imgs):
-        if img in seen:
+    ids = screenshot_ids(appid)
+    out = []
+    for fd in ids:
+        if len(out) >= n:
+            break
+        img, author = full_image(fd)
+        time.sleep(0.3)
+        if not img:
             continue
-        seen.add(img)
         out.append({
             "source": "steam",
             "image_url": img,
             "thumb_url": img,
-            "author": "Steam player",
-            "source_url": files[i] if i < len(files) else url,
+            "author": author,
+            "source_url": fd,
             "caption": None,
         })
-        if len(out) >= n:
-            break
-    return out
-
-
-def reddit_images(name: str, n: int):
-    try:
-        r = S.get("https://www.reddit.com/search.json",
-                  params={"q": f'"{name}"', "sort": "top", "t": "all",
-                          "limit": 30, "type": "link"}, timeout=25)
-        children = r.json().get("data", {}).get("children", [])
-    except Exception:
-        return []
-    token = norm(name)
-    out = []
-    for c in children:
-        d = c.get("data", {})
-        url = d.get("url_overridden_by_dest") or d.get("url", "")
-        is_img = (d.get("post_hint") == "image"
-                  or url.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
-                  or "i.redd.it" in url)
-        if not is_img:
-            continue
-        if token not in norm(d.get("title", "")):   # cut obvious off-topic noise
-            continue
-        thumb = d.get("thumbnail")
-        out.append({
-            "source": "reddit",
-            "image_url": url,
-            "thumb_url": thumb if isinstance(thumb, str) and thumb.startswith("http") else None,
-            "author": "u/" + d.get("author", "?"),
-            "source_url": "https://www.reddit.com" + d.get("permalink", ""),
-            "caption": d.get("title"),
-        })
-        if len(out) >= n:
-            break
     return out
 
 
 def main() -> int:
-    games = fetch_games()
-    log(f"{MODE}: {len(games)} games")
-    items, stats = [], {"steam": 0, "reddit": 0, "with_any": 0}
+    games = load_games()
+    log(f"{len(games)} games (source: {GAMES_FILE if os.path.exists(GAMES_FILE) else 'supabase'})")
+    items, covered = [], 0
 
     for gi, g in enumerate(games, 1):
         gid, name = g["id"], g["name"]
+        hit = steam_appid(name)
+        time.sleep(0.5)
         rows = []
-
-        appid = steam_appid(name)
-        time.sleep(0.4)
-        if appid:
-            rows += steam_screenshots(appid, PER_GAME)
-            time.sleep(0.6)
-
-        rows += reddit_images(name, PER_GAME)
-        time.sleep(1.2)  # be polite to reddit
-
-        for r in rows:
-            r["game_id"] = gid
-            items.append(r)
-        s = sum(1 for r in rows if r["source"] == "steam")
-        rd = sum(1 for r in rows if r["source"] == "reddit")
-        stats["steam"] += s
-        stats["reddit"] += rd
+        if hit:
+            appid, sname = hit
+            rows = steam_screenshots(appid, PER_GAME)
+            for r in rows:
+                r["game_id"] = gid
+            items.extend(rows)
         if rows:
-            stats["with_any"] += 1
-        log(f"  [{gi}/{len(games)}] {name[:38]:38} steam={s} reddit={rd}")
+            covered += 1
+        log(f"  [{gi}/{len(games)}] {name[:34]:34} "
+            f"appid={hit[0] if hit else '-':>8}  shots={len(rows)}")
+        time.sleep(0.4)
 
-    payload = {"mode": MODE, "per_game": PER_GAME, "items": items, "stats": stats}
+    payload = {"source": "steam", "per_game": PER_GAME, "items": items,
+               "covered": covered, "games": len(games)}
     os.makedirs(os.path.dirname(OUT) or ".", exist_ok=True)
-    with open(OUT, "w") as f:
-        json.dump(payload, f)
-    log(f"Wrote {OUT}: {len(items)} links "
-        f"(steam={stats['steam']}, reddit={stats['reddit']}, "
-        f"{stats['with_any']}/{len(games)} games covered)")
+    json.dump(payload, open(OUT, "w"))
+    log(f"Wrote {OUT}: {len(items)} screenshots across "
+        f"{covered}/{len(games)} games")
     return 0
 
 
