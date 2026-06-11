@@ -8,6 +8,10 @@ igdb_dataset/
 *.env
 credentials.json
 
+# Node (PWA test harness)
+node_modules/
+package-lock.json
+
 # Python
 __pycache__/
 *.pyc

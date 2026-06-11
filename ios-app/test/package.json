@@ -1,0 +1,12 @@
+{
+  "name": "ps-recommender-ios-test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Headless verification of the PlayStation Game Recommender PWA flow.",
+  "scripts": {
+    "test": "node verify_app.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

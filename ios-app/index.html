@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <title>PlayStation Game Recommender</title>
+  <meta name="description" content="Tell it a PS4/PS5 game you love and get nine real recommendations with cover art and ratings." />
+
+  <!-- PWA / iOS home-screen app -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PS Recommender" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- ======================= HOME / SEARCH ======================= -->
+    <section id="view-home" class="view active">
+      <div class="home-inner">
+        <div class="brand">
+          <div class="brand-glyph">▶</div>
+          <h1 class="title">PlayStation<br/>Game Recommender</h1>
+          <p class="subtitle">Tell me a game you loved — I'll find more like it.</p>
+        </div>
+
+        <form id="search-form" class="search-bar" autocomplete="off">
+          <input id="search-input" type="search" inputmode="search"
+                 placeholder="Search a game…  e.g. God of War"
+                 aria-label="Search for a game" />
+          <button id="search-btn" type="submit" class="btn-primary" aria-label="Search">Search</button>
+        </form>
+
+        <div id="search-status" class="status" hidden></div>
+        <ul id="results" class="results" hidden></ul>
+
+        <p class="hint">Try: Elden Ring · The Last of Us · Hades · Gran Turismo</p>
+      </div>
+    </section>
+
+    <!-- ======================= DETAIL ======================= -->
+    <section id="view-detail" class="view">
+      <header class="topbar">
+        <button class="btn-back" data-nav="home" aria-label="Back to search">‹ Search</button>
+      </header>
+      <div id="detail-body" class="detail-body"></div>
+    </section>
+
+    <!-- ======================= RECOMMENDATIONS ======================= -->
+    <section id="view-recs" class="view">
+      <header class="topbar">
+        <button class="btn-back" data-nav="back-detail" aria-label="Back">‹ Back</button>
+        <button id="share-btn" class="btn-ghost" aria-label="Share">Share</button>
+      </header>
+      <h2 id="recs-heading" class="recs-heading"></h2>
+      <div id="recs-grid" class="recs-grid"></div>
+    </section>
+
+    <!-- loading + toast overlays -->
+    <div id="spinner" class="spinner" hidden><div class="ring"></div></div>
+    <div id="toast" class="toast" hidden></div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

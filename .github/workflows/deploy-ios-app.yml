@@ -1,0 +1,41 @@
+name: Deploy iPhone app to GitHub Pages
+
+# Publishes the static PWA in ios-app/ to GitHub Pages so it can be opened
+# (and "Added to Home Screen") on an iPhone over HTTPS.
+#
+# One-time setup by the repo owner:
+#   Settings → Pages → Build and deployment → Source: "GitHub Actions"
+
+on:
+  push:
+    branches:
+      - main
+      - claude/github-project-ios-app-jfyprv
+    paths:
+      - "ios-app/**"
+      - ".github/workflows/deploy-ios-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ios-app
+      - id: deployment
+        uses: actions/deploy-pages@v4
