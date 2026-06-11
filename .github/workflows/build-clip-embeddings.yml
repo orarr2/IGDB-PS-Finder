@@ -1,0 +1,59 @@
+name: Compute CLIP embeddings
+
+# Embeds every game's gameplay screenshots with CLIP (jina-clip-v1) and commits
+# the per-screenshot vectors (ml/clip_embeddings/) for semantic photo search.
+# Run: Actions → "Compute CLIP embeddings" → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Cap number of games (0 = all)"
+        default: "0"
+  push:
+    branches: [main]
+    paths:
+      - "ml/clip_embeddings.py"
+      - ".github/workflows/build-clip-embeddings.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install pillow numpy requests einops timm
+          pip install transformers --upgrade
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Compute CLIP embeddings
+        env:
+          SHOTS: "3"
+          LIMIT: ${{ github.event.inputs.limit || '0' }}
+        run: |
+          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' docs/config.js)
+          export SUPABASE_KEY=$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' docs/config.js)
+          python ml/clip_embeddings.py
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ml/clip_embeddings
+          git commit -m "Add CLIP screenshot embeddings [skip ci]" || { echo "no changes"; exit 0; }
+          git push
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clip-embeddings
+          path: ml/clip_embeddings/*.json
+          if-no-files-found: warn
