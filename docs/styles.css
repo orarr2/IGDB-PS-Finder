@@ -99,6 +99,11 @@ button { font-family: inherit; cursor: pointer; }
 .status { margin-top: 18px; color: var(--muted); font-size: 15px; }
 .hint { margin-top: 26px; color: #5f7197; font-size: 13px; }
 
+.or-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; margin: 18px 0 8px; width: 100%; }
+.or-divider::before, .or-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.photo-btn { font-size: 15px; padding: 13px 18px; }
+.photo-hint { margin: 8px 0 0; color: #5f7197; font-size: 12.5px; max-width: 460px; }
+
 /* ---------- cover art ---------- */
 .cover {
   position: relative; width: 100%; overflow: hidden; border-radius: 12px;

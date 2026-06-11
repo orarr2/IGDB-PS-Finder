@@ -166,6 +166,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!calls.join("\n").includes("/rpc/get_recommendations")) fail("smart endpoint never called");
   if (doc.querySelectorAll("#recs-grid .card").length !== 12) fail("smart mode should render 12 cards");
   console.log("  ✓ 'Smart match' toggle calls get_recommendations and renders cards");
+
+  // ---- 4c. photo-search results screen ----
+  if (!doc.querySelector("#photo-btn")) fail("'Search by photo' button missing");
+  window.__app.openPhotoResults(RECS.slice(0, 12));
+  await sleep(20);
+  if (doc.querySelectorAll("#recs-grid .card").length !== 12) fail("photo results should render 12 cards");
+  if (!/look like your photo/i.test(doc.querySelector("#recs-heading").textContent)) fail("photo heading wrong");
+  if (!doc.querySelector("#rec-mode").hidden) fail("mode toggle should be hidden in photo mode");
+  console.log("  ✓ search-by-photo results screen renders (button + grid + hidden toggle)");
   // return to recs for the rest of the checks
   doc.querySelector("#view-detail .btn-back").dispatchEvent(new window.Event("click"));
   await sleep(20);

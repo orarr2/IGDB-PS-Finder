@@ -82,6 +82,21 @@ def load_model():
     return model, pre
 
 
+def export_onnx(model, path="docs/models/mobilenet_v3_small.onnx"):
+    """Export the same feature extractor for in-browser (onnxruntime-web) use,
+    so a photo embedded in the browser is comparable to the stored game vectors.
+    Input: normalised 1x3x224x224 (ImageNet)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dummy = torch.randn(1, 3, 224, 224)
+    torch.onnx.export(
+        model, dummy, path,
+        input_names=["input"], output_names=["embedding"],
+        dynamic_axes={"input": {0: "batch"}, "embedding": {0: "batch"}},
+        opset_version=17,
+    )
+    log("Exported ONNX model →", path, f"({os.path.getsize(path)//1024} KB)")
+
+
 def fetch_image(image_id: str):
     try:
         r = requests.get(IMG.format(image_id), headers={"User-Agent": UA}, timeout=20)
@@ -100,6 +115,7 @@ def main() -> int:
 
     model, pre = load_model()
     log("Model loaded (mobilenet_v3_small, 576-d).")
+    export_onnx(model)
 
     ids: list[int] = []
     vecs: list[np.ndarray] = []
@@ -176,6 +192,15 @@ def main() -> int:
     with open(OUT, "w") as f:
         json.dump(payload, f)
     log(f"Wrote {OUT} ({len(ids)} games) in {time.time() - t0:.0f}s")
+
+    # per-game vectors for in-browser photo search (loaded into pgvector), sharded
+    emb = [{"id": ids[i], "v": [round(float(x), 5) for x in vecs[i]]} for i in range(len(ids))]
+    os.makedirs("ml/embeddings", exist_ok=True)
+    SH = 1000
+    for s in range(0, len(emb), SH):
+        p = f"ml/embeddings/game_embeddings_{s // SH:02d}.json"
+        json.dump({"items": emb[s:s + SH]}, open(p, "w"))
+        log("wrote", p, len(emb[s:s + SH]))
     return 0
 
 

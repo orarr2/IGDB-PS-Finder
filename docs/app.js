@@ -157,6 +157,13 @@
     document.addEventListener("click", function (e) {
       if (!e.target.closest("#search-form")) sug.hidden = true;
     });
+
+    // search by photo
+    var pbtn = $("#photo-btn"), pin = $("#photo-input");
+    if (pbtn && pin) {
+      pbtn.addEventListener("click", function () { pin.value = ""; pin.click(); });
+      pin.addEventListener("change", function () { handlePhoto(pin.files && pin.files[0]); });
+    }
   }
 
   function runSuggest(q, openIfSingle) {
@@ -450,6 +457,8 @@
   function openRecs(source) {
     sourceGame = source;
     $("#recs-heading").textContent = "Because you like “" + source.name + "”";
+    var seg = $("#rec-mode"); if (seg) seg.hidden = false;
+    var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = false;
     push("recs");
     // Look-alike (visual) is the headline mode; grab its cosine scores first.
     showSpinner(true);
@@ -597,6 +606,106 @@
     else toast("Sharing not supported.");
   }
 
+  // ============================================================ PHOTO SEARCH
+  var ORT_VER = "1.19.2";
+  var MODEL_URL = "models/mobilenet_v3_small.onnx";
+  var ortSessionP = null;
+
+  function loadOrt() {
+    if (ortSessionP) return ortSessionP;
+    ortSessionP = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/onnxruntime-web@" + ORT_VER + "/dist/ort.min.js";
+      s.onload = function () {
+        try {
+          window.ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@" + ORT_VER + "/dist/";
+          window.ort.InferenceSession.create(MODEL_URL).then(resolve, reject);
+        } catch (e) { reject(e); }
+      };
+      s.onerror = function () { reject(new Error("Failed to load the AI runtime.")); };
+      document.head.appendChild(s);
+    });
+    return ortSessionP;
+  }
+
+  function fileToImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () { resolve({ img: img, url: url }); };
+      img.onerror = function () { reject(new Error("Couldn't read that image.")); };
+      img.src = url;
+    });
+  }
+
+  // resize shorter side to 256, centre-crop 224, normalise (ImageNet) → NCHW
+  function preprocess(img) {
+    var w = img.naturalWidth, h = img.naturalHeight;
+    var scale = 256 / Math.min(w, h);
+    var rw = Math.max(224, Math.round(w * scale)), rh = Math.max(224, Math.round(h * scale));
+    var c = document.createElement("canvas"); c.width = rw; c.height = rh;
+    var ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0, rw, rh);
+    var sx = Math.floor((rw - 224) / 2), sy = Math.floor((rh - 224) / 2);
+    var d = ctx.getImageData(sx, sy, 224, 224).data;
+    var mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225];
+    var N = 224 * 224, f = new Float32Array(3 * N);
+    for (var i = 0; i < N; i++) {
+      f[i]         = ((d[i * 4]     / 255) - mean[0]) / std[0];
+      f[N + i]     = ((d[i * 4 + 1] / 255) - mean[1]) / std[1];
+      f[2 * N + i] = ((d[i * 4 + 2] / 255) - mean[2]) / std[2];
+    }
+    return f;
+  }
+
+  function handlePhoto(file) {
+    if (!file) return;
+    showSpinner(true);
+    fileToImage(file).then(function (r) {
+      return loadOrt().then(function (session) {
+        var input = new window.ort.Tensor("float32", preprocess(r.img), [1, 3, 224, 224]);
+        var feeds = {}; feeds[session.inputNames[0]] = input;
+        return session.run(feeds).then(function (out) {
+          var emb = out[session.outputNames[0]].data;
+          var s = 0, i; for (i = 0; i < emb.length; i++) s += emb[i] * emb[i];
+          s = Math.sqrt(s) || 1;
+          var q = []; for (i = 0; i < emb.length; i++) q.push(+(emb[i] / s).toFixed(6));
+          return rpc("match_games_by_image", { query: "[" + q.join(",") + "]", lim: REC_COUNT });
+        });
+      });
+    }).then(function (games) {
+      showSpinner(false);
+      if (!games || !games.length) { toast("No visual matches found."); return; }
+      openPhotoResults(games);
+    }).catch(function (err) {
+      showSpinner(false);
+      console.error(err);
+      toast("Photo search isn't available right now.");
+    });
+  }
+
+  function openPhotoResults(games) {
+    sourceGame = null;
+    currentVisScores = {};
+    $("#recs-heading").textContent = "📷 Games that look like your photo";
+    var seg = $("#rec-mode"); if (seg) seg.hidden = true;
+    var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
+    $("#recs-note").hidden = true;
+    var grid = $("#recs-grid"); grid.innerHTML = "";
+    games.forEach(function (g) {
+      var card = el("div", "card");
+      card.appendChild(coverEl(g, "cover_big", 160, 226));
+      card.appendChild(el("div", "card-name", g.name));
+      var meta = [];
+      if (g.release_year) meta.push(String(g.release_year));
+      var rr = rating(g.total_rating); if (rr) meta.push("★ " + rr);
+      if (arr(g.genres).length) meta.push(arr(g.genres)[0]);
+      card.appendChild(el("div", "card-sub", meta.join("  ·  ")));
+      attachCardInteraction(card, g);
+      grid.appendChild(card);
+    });
+    push("recs");
+  }
+
   // ============================================================ INIT
   function init() {
     if (!URL_BASE || !KEY) { alert("Missing backend config (config.js)."); return; }
@@ -622,6 +731,7 @@
   window.__app = {
     openPick: openPick, openDetail: openDetail, openRecs: openRecs,
     shareText: shareText, whyPanel: whyPanel, openLightbox: openLightbox,
+    openPhotoResults: openPhotoResults, matchInfo: matchInfo,
     setConfig: function (c) { URL_BASE = c.SUPABASE_URL; KEY = c.SUPABASE_KEY; },
   };
 
