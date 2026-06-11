@@ -9,11 +9,11 @@ you might enjoy — with cover art, ratings, and a one-click share.
 
 ## 📱 iPhone app
 
-There's now an installable **iPhone app** in [`ios-app/`](ios-app/) — a
-Progressive Web App you add to your Home Screen from Safari (no App Store, no
-Mac, no Xcode). It talks to the same live backend, so it returns the same real
-recommendations. See [`ios-app/README.md`](ios-app/README.md) for the two-minute
-setup.
+There's now an installable **iPhone app** in [`docs/`](docs/) — a Progressive
+Web App you add to your Home Screen from Safari (no App Store, no Mac, no Xcode).
+It talks to the same live backend, so it returns the same real recommendations.
+It's served via GitHub Pages (Deploy from a branch → `/docs`). See
+[`docs/README.md`](docs/README.md) for the two-minute setup.
 
 ## What's in the repo
 

@@ -21,11 +21,14 @@ No App Store, no Mac, no Xcode required.
 
 ### Option A — GitHub Pages (recommended, nothing to keep running)
 
-1. In the repo on github.com: **Settings → Pages → Build and deployment →
-   Source: _GitHub Actions_**.
-2. Push this branch (or run the **"Deploy iPhone app to GitHub Pages"** workflow
-   from the Actions tab). It publishes this folder.
-3. When the workflow finishes it prints a URL like
+This app lives in the `docs/` folder so GitHub Pages can serve it with the
+simple **"Deploy from a branch"** method — no Actions workflow needed.
+
+1. Make the repo **public** (Pages on a private repo needs a paid plan).
+2. In the repo: **Settings → Pages → Build and deployment**:
+   - **Source:** _Deploy from a branch_
+   - **Branch:** the branch this app is on → **Folder: `/docs`** → **Save**.
+3. Wait ~1 minute. Pages shows a URL like
    `https://<your-username>.github.io/<repo>/`.
 4. On your **iPhone**, open that URL in **Safari**.
 5. Tap the **Share** button → **Add to Home Screen** → **Add**.
@@ -33,13 +36,14 @@ No App Store, no Mac, no Xcode required.
 
 > HTTPS (which Pages provides) is required for Home-Screen install. Use Safari —
 > Chrome/Firefox on iOS can open the app but can't install it to the Home Screen.
+> The `.nojekyll` file in this folder tells Pages to serve the files as-is.
 
 ### Option B — From your computer over Wi-Fi (quick test)
 
 Your iPhone and computer must be on the same Wi-Fi network.
 
 ```bash
-cd ios-app
+cd docs
 python3 -m http.server 8000
 ```
 

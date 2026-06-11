@@ -13,7 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
 
-const DIR = "/home/user/IGDB-PlayStation-Games-recommendations-by-cover-photos-with-gradient-boosting/ios-app";
+const DIR = path.join(__dirname, ".."); // the app folder (docs/)
 let html = fs.readFileSync(path.join(DIR, "index.html"), "utf8");
 // Inline the external scripts so jsdom executes them (no real network/resources).
 const configJs = fs.readFileSync(path.join(DIR, "config.js"), "utf8");
