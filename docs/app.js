@@ -96,7 +96,7 @@
 
   // ---------- navigation (simple stack) ----------
   var stack = ["home"];
-  function show(view) { document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); }); var v = $("#view-" + view); if (v) v.classList.add("active"); window.scrollTo(0, 0); }
+  function show(view) { hidePreview(); document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); }); var v = $("#view-" + view); if (v) v.classList.add("active"); window.scrollTo(0, 0); }
   function push(view) { stack.push(view); show(view); }
   function back() {
     if (stack.length > 1) stack.pop();
@@ -367,7 +367,9 @@
     var wrap = el("div", "score-block");
     var head = el("div", "score-head");
     head.appendChild(el("span", "score-big", mi.pct + "%"));
-    head.appendChild(el("span", "score-cap", "match with " + (src && src.name ? src.name : "your pick")));
+    var cap = el("span", "score-cap");
+    cap.innerHTML = "match with <b>" + esc(src && src.name ? src.name : "your pick") + "</b>";
+    head.appendChild(cap);
     wrap.appendChild(head);
     var rows = el("div", "score-rows");
     if (mi.visPct != null)
@@ -454,9 +456,18 @@
     });
   }
 
+  function renderSourceBar(game, html) {
+    var bar = $("#rec-source");
+    if (!bar) return;
+    bar.innerHTML = "";
+    if (game) bar.appendChild(coverEl(game, "cover_small", 90, 128));
+    bar.appendChild(el("div", "rec-source-text")).innerHTML = html;
+    bar.hidden = false;
+  }
+
   function openRecs(source) {
     sourceGame = source;
-    $("#recs-heading").textContent = "Because you like “" + source.name + "”";
+    renderSourceBar(source, "Recommendations for<br><b>" + esc(source.name) + "</b>");
     var seg = $("#rec-mode"); if (seg) seg.hidden = false;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = false;
     push("recs");
@@ -536,6 +547,7 @@
     card.addEventListener("mouseleave", function () { hidePreview(); });
   }
 
+  var previewTimer = null;
   function showPreview(game) {
     var shots = arr(game.screenshot_ids);
     if (!shots.length) return;
@@ -550,8 +562,10 @@
       holder.appendChild(im);
     });
     box.hidden = false;
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(hidePreview, 2500); // safety auto-dismiss
   }
-  function hidePreview() { var box = $("#preview"); if (box) box.hidden = true; }
+  function hidePreview() { clearTimeout(previewTimer); var box = $("#preview"); if (box) box.hidden = true; }
 
   // ============================================================ LIGHTBOX
   var lbShots = [], lbIndex = 0, lbName = "";
@@ -607,27 +621,9 @@
   }
 
   // ============================================================ PHOTO SEARCH
-  var ORT_VER = "1.19.2";
-  var MODEL_URL = "models/mobilenet_v3_small.onnx";
-  var ortSessionP = null;
-
-  function loadOrt() {
-    if (ortSessionP) return ortSessionP;
-    ortSessionP = new Promise(function (resolve, reject) {
-      var s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/onnxruntime-web@" + ORT_VER + "/dist/ort.min.js";
-      s.onload = function () {
-        try {
-          window.ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@" + ORT_VER + "/dist/";
-          window.ort.InferenceSession.create(MODEL_URL).then(resolve, reject);
-        } catch (e) { reject(e); }
-      };
-      s.onerror = function () { reject(new Error("Failed to load the AI runtime.")); };
-      document.head.appendChild(s);
-    });
-    return ortSessionP;
-  }
-
+  // The photo is embedded server-side (Supabase Edge Function → Jina CLIP) and
+  // matched against each game's screenshot embeddings (pgvector). Nothing is
+  // downloaded to the phone; the model "understands" scenes (pitch, track, etc.).
   function fileToImage(file) {
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file);
@@ -638,55 +634,47 @@
     });
   }
 
-  // resize shorter side to 256, centre-crop 224, normalise (ImageNet) → NCHW
-  function preprocess(img) {
-    var w = img.naturalWidth, h = img.naturalHeight;
-    var scale = 256 / Math.min(w, h);
-    var rw = Math.max(224, Math.round(w * scale)), rh = Math.max(224, Math.round(h * scale));
-    var c = document.createElement("canvas"); c.width = rw; c.height = rh;
-    var ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0, rw, rh);
-    var sx = Math.floor((rw - 224) / 2), sy = Math.floor((rh - 224) / 2);
-    var d = ctx.getImageData(sx, sy, 224, 224).data;
-    var mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225];
-    var N = 224 * 224, f = new Float32Array(3 * N);
-    for (var i = 0; i < N; i++) {
-      f[i]         = ((d[i * 4]     / 255) - mean[0]) / std[0];
-      f[N + i]     = ((d[i * 4 + 1] / 255) - mean[1]) / std[1];
-      f[2 * N + i] = ((d[i * 4 + 2] / 255) - mean[2]) / std[2];
-    }
-    return f;
+  // downscale to a small JPEG data-URL so the upload is tiny and fast
+  function downscaleDataUrl(file, max) {
+    return fileToImage(file).then(function (r) {
+      var img = r.img, w = img.naturalWidth, h = img.naturalHeight;
+      var scale = Math.min(1, max / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+      var c = document.createElement("canvas"); c.width = cw; c.height = ch;
+      c.getContext("2d").drawImage(img, 0, 0, cw, ch);
+      try { return c.toDataURL("image/jpeg", 0.85); } catch (e) { return r.url; }
+    });
   }
 
   function handlePhoto(file) {
     if (!file) return;
     showSpinner(true);
-    fileToImage(file).then(function (r) {
-      return loadOrt().then(function (session) {
-        var input = new window.ort.Tensor("float32", preprocess(r.img), [1, 3, 224, 224]);
-        var feeds = {}; feeds[session.inputNames[0]] = input;
-        return session.run(feeds).then(function (out) {
-          var emb = out[session.outputNames[0]].data;
-          var s = 0, i; for (i = 0; i < emb.length; i++) s += emb[i] * emb[i];
-          s = Math.sqrt(s) || 1;
-          var q = []; for (i = 0; i < emb.length; i++) q.push(+(emb[i] / s).toFixed(6));
-          return rpc("match_games_by_image", { query: "[" + q.join(",") + "]", lim: REC_COUNT });
+    downscaleDataUrl(file, 512).then(function (dataUrl) {
+      return fetch(URL_BASE + "/functions/v1/photo-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
+        body: JSON.stringify({ image: dataUrl, lim: REC_COUNT }),
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) throw new Error(d && d.error ? d.error : "search failed");
+          return d.games || [];
         });
       });
     }).then(function (games) {
       showSpinner(false);
-      if (!games || !games.length) { toast("No visual matches found."); return; }
+      if (!games.length) { toast("No visual matches found."); return; }
       openPhotoResults(games);
     }).catch(function (err) {
       showSpinner(false);
       console.error(err);
-      toast("Photo search isn't available right now.");
+      toast("Photo search isn't ready yet (server key not set).");
     });
   }
 
   function openPhotoResults(games) {
     sourceGame = null;
     currentVisScores = {};
-    $("#recs-heading").textContent = "📷 Games that look like your photo";
+    renderSourceBar(null, "📷 Games that look like<br><b>your photo</b>");
     var seg = $("#rec-mode"); if (seg) seg.hidden = true;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
     $("#recs-note").hidden = true;
@@ -721,6 +709,13 @@
       });
     });
     var s = $("#share-btn"); if (s) s.addEventListener("click", doShare);
+
+    // the press-and-hold preview must never get stuck on screen
+    document.addEventListener("pointerup", hidePreview, true);
+    document.addEventListener("pointercancel", hidePreview, true);
+    document.addEventListener("touchend", hidePreview, true);
+    var pv = $("#preview"); if (pv) pv.addEventListener("click", hidePreview);
+
     show("home");
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
