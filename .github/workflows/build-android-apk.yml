@@ -73,7 +73,9 @@ jobs:
           BUBBLEWRAP_KEY_PASSWORD: psrecommender
         run: |
           bubblewrap doctor || true
-          bubblewrap build --skipPwaValidation
+          # `bubblewrap build` asks "regenerate your project? (Y/n)" when there's
+          # no generated project yet; auto-answer yes since CI has no stdin.
+          yes | bubblewrap build --skipPwaValidation
           echo "--- build output ---"
           ls -la
 
