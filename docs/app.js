@@ -1,11 +1,16 @@
 /*
- * PlayStation Game Recommender — iPhone PWA front-end.
+ * PlayStation Game Recommender — iPhone/Android PWA front-end.
  *
  * Talks directly to the Supabase PostgREST API (same backend + data as the
- * desktop app and the IGDB notebook). No framework, no build step — just a
- * static page that any phone can open and "Add to Home Screen".
+ * IGDB notebook). No framework, no build step.
  *
- * Flow:  Search  →  Detail  →  9 Recommendations  →  (drill in / share)
+ * Features:
+ *   - Live autocomplete as you type
+ *   - Rich detail screen: cover, rating, genres/themes, summary, screenshot
+ *     gallery (tap for full-quality lightbox)
+ *   - 12 recommendations; press & hold a card to peek at in-game screenshots
+ *   - On a recommended game's detail: a "Why we picked this for you" panel that
+ *     explains the match using the same logic the recommendation engine scores
  */
 (function () {
   "use strict";
@@ -14,326 +19,426 @@
   var URL_BASE = CFG.SUPABASE_URL;
   var KEY = CFG.SUPABASE_KEY;
 
-  // IGDB CDN cover art. Sizes: t_cover_big (264x374), t_cover_small (90x128).
-  function cover(id, size) {
-    return "https://images.igdb.com/igdb/image/upload/t_" + (size || "cover_big") + "/" + id + ".jpg";
+  var REC_COUNT = 12; // at least 10 recommendations
+
+  // IGDB CDN. https://images.igdb.com/igdb/image/upload/t_<size>/<id>.jpg
+  function img(id, size) {
+    return "https://images.igdb.com/igdb/image/upload/t_" + size + "/" + id + ".jpg";
   }
+  function cover(id, size) { return img(id, size || "cover_big"); }
+  function shot(id, size) { return img(id, size || "screenshot_med"); }
 
-  var GAME_COLS =
-    "id,name,release_year,total_rating,cover_id,summary,genres,themes,developers,publishers";
+  var GAME_COLS = [
+    "id", "name", "release_year", "total_rating", "cover_id", "summary",
+    "genres", "themes", "developers", "publishers",
+    "game_modes", "similar_games", "screenshot_ids", "artwork_ids",
+  ].join(",");
 
-  // ---------- tiny REST client -------------------------------------------
+  // ---------- REST ----------
   function headers() {
     return {
-      apikey: KEY,
-      Authorization: "Bearer " + KEY,
-      "Content-Type": "application/json",
-      Accept: "application/json",
+      apikey: KEY, Authorization: "Bearer " + KEY,
+      "Content-Type": "application/json", Accept: "application/json",
     };
   }
-
-  function rpc(fn, body) {
-    return fetch(URL_BASE + "/rest/v1/rpc/" + fn, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify(body),
-    }).then(checkJson);
-  }
-
-  function getGame(id) {
-    var url =
-      URL_BASE + "/rest/v1/games?id=eq." + encodeURIComponent(id) +
-      "&select=" + encodeURIComponent(GAME_COLS) + "&limit=1";
-    return fetch(url, { headers: headers() })
-      .then(checkJson)
-      .then(function (rows) { return rows && rows[0]; });
-  }
-
   function checkJson(r) {
-    if (!r.ok) {
-      return r.text().then(function (t) {
-        throw new Error("Server " + r.status + (t ? ": " + t.slice(0, 120) : ""));
-      });
-    }
+    if (!r.ok) return r.text().then(function (t) { throw new Error("Server " + r.status + (t ? ": " + t.slice(0, 120) : "")); });
     return r.json();
   }
-
-  function searchGames(q) { return rpc("search_games", { q: q, lim: 12 }); }
-  function recommend(id) { return rpc("get_recommendations", { source_id: id, lim: 9 }); }
-
-  // ---------- helpers -----------------------------------------------------
-  function $(sel) { return document.querySelector(sel); }
-  function el(tag, cls, text) {
-    var n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text != null) n.textContent = text;
-    return n;
+  function rpc(fn, body) {
+    return fetch(URL_BASE + "/rest/v1/rpc/" + fn, { method: "POST", headers: headers(), body: JSON.stringify(body) }).then(checkJson);
   }
-  function rating(v) {
-    var n = parseFloat(v);
-    return isFinite(n) ? String(Math.round(n)) : null;
+  function getGame(id) {
+    var u = URL_BASE + "/rest/v1/games?id=eq." + encodeURIComponent(id) + "&select=" + encodeURIComponent(GAME_COLS) + "&limit=1";
+    return fetch(u, { headers: headers() }).then(checkJson).then(function (rows) { return rows && rows[0]; });
   }
+  function searchGames(q, lim) { return rpc("search_games", { q: q, lim: lim || 8 }); }
+  function recommend(id) { return rpc("get_recommendations", { source_id: id, lim: REC_COUNT }); }
+
+  // ---------- helpers ----------
+  function $(s) { return document.querySelector(s); }
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function rating(v) { var n = parseFloat(v); return isFinite(n) ? String(Math.round(n)) : null; }
   function arr(v) { return Array.isArray(v) ? v : []; }
-
-  var spinnerCount = 0;
-  function showSpinner(on) {
-    spinnerCount = Math.max(0, spinnerCount + (on ? 1 : -1));
-    var s = $("#spinner");
-    if (s) s.hidden = spinnerCount === 0;
-  }
-  var toastTimer;
-  function toast(msg) {
-    var t = $("#toast");
-    if (!t) return;
-    t.textContent = msg;
-    t.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.hidden = true; }, 2200);
+  function intersect(a, b) { var B = arr(b); return arr(a).filter(function (x) { return B.indexOf(x) !== -1; }); }
+  function listText(items, max) {
+    items = items.slice(0, max || 3);
+    if (items.length === 1) return items[0];
+    if (items.length === 2) return items[0] + " and " + items[1];
+    return items.slice(0, -1).join(", ") + ", and " + items[items.length - 1];
   }
 
-  // ---------- navigation --------------------------------------------------
-  function show(view) {
-    var views = document.querySelectorAll(".view");
-    for (var i = 0; i < views.length; i++) views[i].classList.remove("active");
-    var v = $("#view-" + view);
-    if (v) v.classList.add("active");
-    window.scrollTo(0, 0);
+  var spin = 0;
+  function showSpinner(on) { spin = Math.max(0, spin + (on ? 1 : -1)); var s = $("#spinner"); if (s) s.hidden = spin === 0; }
+  var toastT;
+  function toast(m) { var t = $("#toast"); if (!t) return; t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, 2200); }
+
+  // ---------- navigation (simple stack) ----------
+  var stack = ["home"];
+  function show(view) { document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); }); var v = $("#view-" + view); if (v) v.classList.add("active"); window.scrollTo(0, 0); }
+  function push(view) { stack.push(view); show(view); }
+  function back() {
+    if (stack.length > 1) stack.pop();
+    var v = stack[stack.length - 1];
+    if (v === "home") resetHome();
+    show(v);
   }
 
-  // ---------- cover image with graceful placeholder -----------------------
-  function coverImg(game, size, w, h) {
+  // ---------- cover element ----------
+  function coverEl(game, size, ratioW, ratioH) {
     var wrap = el("div", "cover");
-    wrap.style.aspectRatio = (w || 264) + " / " + (h || 374);
-    var letter = (game.name || "?").trim().charAt(0).toUpperCase() || "?";
-    wrap.appendChild(el("span", "cover-ph", letter));
+    wrap.style.aspectRatio = (ratioW || 264) + " / " + (ratioH || 374);
+    wrap.appendChild(el("span", "cover-ph", ((game.name || "?").trim().charAt(0) || "?").toUpperCase()));
     if (game.cover_id) {
-      var img = new Image();
-      img.alt = game.name || "";
-      img.loading = "lazy";
-      img.decoding = "async";
-      img.onload = function () { wrap.classList.add("loaded"); };
-      img.src = cover(game.cover_id, size || "cover_big");
-      wrap.appendChild(img);
+      var i = new Image();
+      i.alt = game.name || ""; i.loading = "lazy"; i.decoding = "async";
+      i.onload = function () { wrap.classList.add("loaded"); };
+      i.src = cover(game.cover_id, size || "cover_big");
+      wrap.appendChild(i);
     }
     return wrap;
   }
 
-  // ---------- HOME --------------------------------------------------------
+  // ============================================================ HOME
+  var suggestT, lastQ = "";
+  function resetHome() {
+    var inp = $("#search-input"); if (inp) inp.value = "";
+    var s = $("#suggest"); if (s) { s.hidden = true; s.innerHTML = ""; }
+    var st = $("#search-status"); if (st) st.hidden = true;
+  }
+
   function initHome() {
     var form = $("#search-form");
     var input = $("#search-input");
     var status = $("#search-status");
-    var list = $("#results");
+    var sug = $("#suggest");
 
+    input.addEventListener("input", function () {
+      var q = (input.value || "").trim();
+      status.hidden = true;
+      clearTimeout(suggestT);
+      if (q.length < 2) { sug.hidden = true; sug.innerHTML = ""; return; }
+      suggestT = setTimeout(function () { runSuggest(q); }, 200);
+    });
+
+    // Pressing enter: open the top suggestion, else run a search.
     form.addEventListener("submit", function (e) {
       e.preventDefault();
-      var q = input.value.trim();
-      if (q.length < 2) { return; }
-      input.blur();
-      list.hidden = true;
-      list.innerHTML = "";
-      status.hidden = false;
-      status.textContent = "Searching…";
-      showSpinner(true);
+      clearTimeout(suggestT);
+      var q = (input.value || "").trim();
+      if (q.length < 2) return;
+      var first = sug.querySelector(".suggest-item");
+      if (first && first.dataset.id) { openPick(parseInt(first.dataset.id, 10)); return; }
+      runSuggest(q, true);
+    });
 
-      searchGames(q)
-        .then(function (matches) {
-          showSpinner(false);
-          if (!matches || !matches.length) {
-            status.textContent = "No games found for “" + q + "”.";
-            return;
-          }
-          if (matches.length === 1) { openDetail(matches[0].id); return; }
-          status.hidden = true;
-          renderResults(matches, list);
-        })
-        .catch(function (err) {
-          showSpinner(false);
-          status.textContent = "Couldn't reach the server. Check your connection.";
-          console.error(err);
-        });
+    // hide suggestions when tapping away
+    document.addEventListener("click", function (e) {
+      if (!e.target.closest("#search-form")) sug.hidden = true;
     });
   }
 
-  function renderResults(matches, list) {
-    list.innerHTML = "";
+  function runSuggest(q, openIfSingle) {
+    lastQ = q;
+    searchGames(q, 8).then(function (matches) {
+      if (lastQ !== q) return; // a newer query superseded this one
+      var sug = $("#suggest");
+      var status = $("#search-status");
+      if (!matches || !matches.length) {
+        sug.hidden = true; sug.innerHTML = "";
+        status.hidden = false; status.textContent = "No games found for “" + q + "”.";
+        return;
+      }
+      if (openIfSingle && matches.length === 1) { openPick(matches[0].id); return; }
+      renderSuggest(matches);
+    }).catch(function (err) {
+      console.error(err);
+      $("#search-status").hidden = false; $("#search-status").textContent = "Couldn't reach the server.";
+    });
+  }
+
+  function renderSuggest(matches) {
+    var sug = $("#suggest");
+    sug.innerHTML = "";
     matches.forEach(function (g) {
-      var li = el("li", "result");
-      li.appendChild(coverImg(g, "cover_small", 90, 128));
-      var meta = el("div", "result-meta");
-      meta.appendChild(el("div", "result-name", g.name));
+      var li = el("li", "suggest-item");
+      li.dataset.id = g.id;
+      li.appendChild(coverEl(g, "cover_small", 90, 128));
+      var meta = el("div", "suggest-meta");
+      meta.appendChild(el("div", "suggest-name", g.name));
       var sub = [];
       if (g.release_year) sub.push(String(g.release_year));
-      var r = rating(g.total_rating);
-      if (r) sub.push("★ " + r);
-      meta.appendChild(el("div", "result-sub", sub.join("   ·   ")));
+      var r = rating(g.total_rating); if (r) sub.push("★ " + r);
+      meta.appendChild(el("div", "suggest-sub", sub.join("   ·   ")));
       li.appendChild(meta);
-      li.addEventListener("click", function () { openDetail(g.id); });
-      list.appendChild(li);
+      li.addEventListener("click", function () { openPick(g.id); });
+      sug.appendChild(li);
     });
-    list.hidden = false;
+    sug.hidden = false;
   }
 
-  // ---------- DETAIL ------------------------------------------------------
-  var currentGame = null;
+  // ============================================================ DETAIL
+  // sourceGame = the game whose recommendations we're currently exploring.
+  var sourceGame = null;
 
-  function openDetail(id) {
+  function openPick(id) {
     showSpinner(true);
-    getGame(id)
-      .then(function (game) {
-        showSpinner(false);
-        if (!game) { toast("That game isn't in the dataset."); return; }
-        currentGame = game;
-        renderDetail(game);
-        show("detail");
-      })
-      .catch(function (err) {
-        showSpinner(false);
-        toast("Network error.");
-        console.error(err);
-      });
+    getGame(id).then(function (game) {
+      showSpinner(false);
+      if (!game) { toast("That game isn't in the dataset."); return; }
+      renderDetail(game, null);
+      push("detail");
+    }).catch(function (err) { showSpinner(false); toast("Network error."); console.error(err); });
   }
 
-  function renderDetail(game) {
+  // whyAgainst: when set, render the "why recommended" panel relative to it.
+  function openDetail(game, whyAgainst) {
+    renderDetail(game, whyAgainst || null);
+    push("detail");
+  }
+
+  function renderDetail(game, whyAgainst) {
     var body = $("#detail-body");
     body.innerHTML = "";
 
-    body.appendChild(coverImg(game, "cover_big", 264, 374));
+    var head = el("div", "detail-head");
+    head.appendChild(coverEl(game, "cover_big", 264, 374));
 
     var info = el("div", "detail-info");
     info.appendChild(el("h2", "detail-title", game.name));
-
     var meta = [];
     if (game.release_year) meta.push(String(game.release_year));
     if (arr(game.developers).length) meta.push(arr(game.developers).slice(0, 2).join(", "));
     info.appendChild(el("p", "detail-meta", meta.join("  ·  ")));
 
     var r = rating(game.total_rating);
-    var ratingRow = el("div", "rating-row");
-    ratingRow.appendChild(el("span", "rating-num", r || "—"));
-    ratingRow.appendChild(el("span", "rating-label", "RATING / 100"));
-    info.appendChild(ratingRow);
+    var rr = el("div", "rating-row");
+    rr.appendChild(el("span", "rating-num", r || "—"));
+    rr.appendChild(el("span", "rating-label", "RATING / 100"));
+    info.appendChild(rr);
 
     var chips = el("div", "chips");
-    arr(game.genres).slice(0, 3).concat(arr(game.themes).slice(0, 2)).forEach(function (t) {
-      chips.appendChild(el("span", "chip", t));
-    });
+    arr(game.genres).slice(0, 3).concat(arr(game.themes).slice(0, 2)).forEach(function (t) { chips.appendChild(el("span", "chip", t)); });
     if (chips.childNodes.length) info.appendChild(chips);
 
-    info.appendChild(el("p", "summary", game.summary || "No summary available."));
+    head.appendChild(info);
+    body.appendChild(head);
 
-    var cta = el("button", "btn-primary btn-block", "See 9 recommendations  →");
+    // WHY panel — right after the score & genres, before the summary.
+    if (whyAgainst) body.appendChild(whyPanel(game, whyAgainst));
+
+    if (game.summary) {
+      var sec = el("div", "section");
+      sec.appendChild(el("h3", "section-h", "About"));
+      sec.appendChild(el("p", "summary", game.summary));
+      body.appendChild(sec);
+    }
+
+    // Screenshot gallery (full-quality lightbox on tap).
+    var shots = arr(game.screenshot_ids);
+    if (shots.length) {
+      var gsec = el("div", "section");
+      gsec.appendChild(el("h3", "section-h", "Screenshots"));
+      var strip = el("div", "gallery");
+      shots.forEach(function (sid, idx) {
+        var cell = el("button", "shot");
+        var im = new Image();
+        im.alt = game.name + " screenshot " + (idx + 1);
+        im.loading = "lazy"; im.decoding = "async";
+        im.onload = function () { cell.classList.add("loaded"); };
+        im.src = shot(sid, "screenshot_med");
+        cell.appendChild(im);
+        cell.addEventListener("click", function () { openLightbox(shots, idx, game.name); });
+        strip.appendChild(cell);
+      });
+      gsec.appendChild(strip);
+      body.appendChild(gsec);
+    }
+
+    var cta = el("button", "btn-primary btn-block", "See " + REC_COUNT + " recommendations  →");
     cta.addEventListener("click", function () { openRecs(game); });
-    info.appendChild(cta);
-
-    body.appendChild(info);
+    body.appendChild(cta);
   }
 
-  // ---------- RECOMMENDATIONS --------------------------------------------
-  var currentRecs = [];
+  // ---------- why-recommended explanation ----------
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+  function whyPanel(rec, src) {
+    var panel = el("div", "why");
+    panel.appendChild(el("h3", "why-h", "✨ Why we picked this for you"));
 
+    var reasons = [];
+    var isSimilar = arr(src.similar_games).map(String).indexOf(String(rec.id)) !== -1;
+    var devs = intersect(rec.developers, src.developers);
+    var genres = intersect(rec.genres, src.genres);
+    var themes = intersect(rec.themes, src.themes);
+    var modes = intersect(rec.game_modes, src.game_modes);
+
+    if (isSimilar) reasons.push("IGDB lists it as a game <b>directly similar to " + esc(src.name) + "</b> — the strongest possible signal.");
+    if (devs.length) reasons.push("Same studio: both come from <b>" + esc(listText(devs, 2)) + "</b>.");
+    if (genres.length) reasons.push("Shared genres you liked: <b>" + esc(listText(genres, 3)) + "</b>.");
+    if (themes.length) reasons.push("Overlapping themes: <b>" + esc(listText(themes, 3)) + "</b>.");
+    if (modes.length) reasons.push("Same way to play: <b>" + esc(listText(modes, 2)) + "</b>.");
+    var r = rating(rec.total_rating);
+    if (r) reasons.push("It's well-rated (<b>★ " + r + "/100</b>), which nudges it up the list.");
+    if (!reasons.length) reasons.push("It scored highly overall against <b>" + esc(src.name) + "</b> on our similarity model.");
+
+    var ul = el("ul", "why-list");
+    reasons.forEach(function (txt) { var li = document.createElement("li"); li.innerHTML = txt; ul.appendChild(li); });
+    panel.appendChild(ul);
+
+    var note = el("p", "why-note");
+    note.innerHTML = "How scoring works: a directly-similar game is worth <b>+1000</b>, each shared developer <b>+15</b>, " +
+      "each shared genre <b>+10</b>, theme <b>+5</b>, play-mode <b>+3</b>, plus a small bump for rating. " +
+      "The top " + REC_COUNT + " by score become your recommendations.";
+    panel.appendChild(note);
+    return panel;
+  }
+
+  // ============================================================ RECOMMENDATIONS
+  var currentRecs = [];
   function openRecs(source) {
     showSpinner(true);
-    recommend(source.id)
-      .then(function (recs) {
-        showSpinner(false);
-        if (!recs || !recs.length) { toast("Couldn't generate recommendations."); return; }
-        currentRecs = recs;
-        $("#recs-heading").textContent = "Because you like “" + source.name + "”";
-        renderRecs(recs);
-        show("recs");
-      })
-      .catch(function (err) {
-        showSpinner(false);
-        toast("Network error.");
-        console.error(err);
-      });
+    recommend(source.id).then(function (recs) {
+      showSpinner(false);
+      if (!recs || !recs.length) { toast("Couldn't generate recommendations."); return; }
+      sourceGame = source;
+      currentRecs = recs;
+      $("#recs-heading").textContent = "Because you like “" + source.name + "”";
+      renderRecs(recs);
+      push("recs");
+    }).catch(function (err) { showSpinner(false); toast("Network error."); console.error(err); });
   }
 
   function renderRecs(recs) {
     var grid = $("#recs-grid");
     grid.innerHTML = "";
     recs.forEach(function (g) {
-      var card = el("button", "card");
-      card.appendChild(coverImg(g, "cover_big", 160, 226));
+      var card = el("div", "card");
+      card.appendChild(coverEl(g, "cover_big", 160, 226));
       card.appendChild(el("div", "card-name", g.name));
       var sub = [];
       if (g.release_year) sub.push(String(g.release_year));
-      var r = rating(g.total_rating);
-      if (r) sub.push("★ " + r);
+      var r = rating(g.total_rating); if (r) sub.push("★ " + r);
       if (arr(g.genres).length) sub.push(arr(g.genres)[0]);
       card.appendChild(el("div", "card-sub", sub.join("  ·  ")));
-      card.addEventListener("click", function () { openDetail(g.id); });
+      attachCardInteraction(card, g);
       grid.appendChild(card);
     });
   }
 
-  function shareText() {
-    if (!currentGame) return "";
-    var lines = ["Because I love " + currentGame.name + ", I should play:"];
-    currentRecs.forEach(function (g, i) {
-      var bits = (i + 1) + ". " + g.name;
-      if (g.release_year) bits += " (" + g.release_year + ")";
-      var r = rating(g.total_rating);
-      if (r) bits += " — ★ " + r + "/100";
-      lines.push(bits);
+  // Tap = open detail (with why). Press & hold = peek screenshots.
+  function attachCardInteraction(card, game) {
+    var holdT = null, held = false;
+    function startHold() {
+      held = false;
+      clearTimeout(holdT);
+      holdT = setTimeout(function () { held = true; showPreview(game); }, 320);
+    }
+    function endHold() { clearTimeout(holdT); if (held) hidePreview(); }
+    card.addEventListener("pointerdown", startHold);
+    card.addEventListener("pointerup", endHold);
+    card.addEventListener("pointerleave", endHold);
+    card.addEventListener("pointercancel", endHold);
+    card.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    card.addEventListener("click", function () {
+      if (held) { held = false; return; } // the hold already showed a preview
+      openDetail(game, sourceGame);
     });
-    lines.push("");
-    lines.push("via PlayStation Game Recommender");
+    // Desktop hover convenience
+    card.addEventListener("mouseenter", function () { showPreview(game); });
+    card.addEventListener("mouseleave", function () { hidePreview(); });
+  }
+
+  function showPreview(game) {
+    var shots = arr(game.screenshot_ids);
+    if (!shots.length) return;
+    var box = $("#preview");
+    $("#preview-name").textContent = game.name;
+    var holder = $("#preview-shots");
+    holder.innerHTML = "";
+    shots.slice(0, 4).forEach(function (sid) {
+      var im = new Image();
+      im.alt = ""; im.decoding = "async";
+      im.src = shot(sid, "screenshot_med");
+      holder.appendChild(im);
+    });
+    box.hidden = false;
+  }
+  function hidePreview() { var box = $("#preview"); if (box) box.hidden = true; }
+
+  // ============================================================ LIGHTBOX
+  var lbShots = [], lbIndex = 0, lbName = "";
+  function openLightbox(shots, index, name) {
+    lbShots = shots; lbIndex = index; lbName = name || "";
+    $("#lightbox").hidden = false;
+    renderLightbox();
+  }
+  function renderLightbox() {
+    var im = $("#lb-img");
+    im.classList.remove("ready");
+    im.onload = function () { im.classList.add("ready"); };
+    im.src = shot(lbShots[lbIndex], "1080p"); // full quality
+    im.alt = lbName + " screenshot " + (lbIndex + 1);
+    $("#lb-counter").textContent = (lbIndex + 1) + " / " + lbShots.length;
+  }
+  function lbStep(d) { lbIndex = (lbIndex + d + lbShots.length) % lbShots.length; renderLightbox(); }
+  function closeLightbox() { $("#lightbox").hidden = true; }
+
+  function initLightbox() {
+    $("#lb-close").addEventListener("click", closeLightbox);
+    $("#lb-prev").addEventListener("click", function (e) { e.stopPropagation(); lbStep(-1); });
+    $("#lb-next").addEventListener("click", function (e) { e.stopPropagation(); lbStep(1); });
+    $("#lightbox").addEventListener("click", function (e) { if (e.target.id === "lightbox") closeLightbox(); });
+    var x0 = null, lb = $("#lightbox");
+    lb.addEventListener("touchstart", function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+    lb.addEventListener("touchend", function (e) {
+      if (x0 == null) return;
+      var dx = e.changedTouches[0].clientX - x0;
+      if (Math.abs(dx) > 40) lbStep(dx < 0 ? 1 : -1);
+      x0 = null;
+    });
+  }
+
+  // ============================================================ SHARE
+  function shareText() {
+    if (!sourceGame) return "";
+    var lines = ["Because I love " + sourceGame.name + ", I should play:"];
+    currentRecs.forEach(function (g, i) {
+      var b = (i + 1) + ". " + g.name;
+      if (g.release_year) b += " (" + g.release_year + ")";
+      var r = rating(g.total_rating); if (r) b += " — ★ " + r + "/100";
+      lines.push(b);
+    });
+    lines.push(""); lines.push("via PlayStation Game Recommender");
     return lines.join("\n");
   }
-
   function doShare() {
-    var text = shareText();
-    if (!text) return;
-    if (navigator.share) {
-      navigator.share({ title: "Game recommendations", text: text }).catch(function () {});
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(function () { toast("Copied to clipboard!"); });
-    } else {
-      toast("Sharing not supported.");
-    }
+    var text = shareText(); if (!text) return;
+    if (navigator.share) navigator.share({ title: "Game recommendations", text: text }).catch(function () {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast("Copied to clipboard!"); });
+    else toast("Sharing not supported.");
   }
 
-  // ---------- wire-up -----------------------------------------------------
+  // ============================================================ INIT
   function init() {
-    if (!URL_BASE || !KEY) {
-      alert("Missing backend config (config.js).");
-      return;
-    }
+    if (!URL_BASE || !KEY) { alert("Missing backend config (config.js)."); return; }
     initHome();
-
-    document.querySelectorAll("[data-nav]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var t = btn.getAttribute("data-nav");
-        if (t === "home") show("home");
-        else if (t === "back-detail") show("detail");
-      });
-    });
-
-    var share = $("#share-btn");
-    if (share) share.addEventListener("click", doShare);
-
+    initLightbox();
+    document.querySelectorAll("[data-nav=back]").forEach(function (b) { b.addEventListener("click", back); });
+    var s = $("#share-btn"); if (s) s.addEventListener("click", doShare);
     show("home");
-
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", function () {
-        navigator.serviceWorker.register("sw.js").catch(function () {});
-      });
+      window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
     }
   }
 
-  // Expose a few internals so an automated test can drive the app.
+  // test hooks
   window.__app = {
-    openDetail: openDetail,
-    openRecs: openRecs,
-    shareText: shareText,
+    openPick: openPick, openDetail: openDetail, openRecs: openRecs,
+    shareText: shareText, whyPanel: whyPanel, openLightbox: openLightbox,
     setConfig: function (c) { URL_BASE = c.SUPABASE_URL; KEY = c.SUPABASE_KEY; },
   };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
 })();

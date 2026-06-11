@@ -4,9 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
   <title>PlayStation Game Recommender</title>
-  <meta name="description" content="Tell it a PS4/PS5 game you love and get nine real recommendations with cover art and ratings." />
+  <meta name="description" content="Tell it a PS4/PS5 game you love and get recommendations with cover art, ratings, screenshots, and why each was picked for you." />
 
-  <!-- PWA / iOS home-screen app -->
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#0a0e1a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -29,16 +28,17 @@
           <p class="subtitle">Tell me a game you loved — I'll find more like it.</p>
         </div>
 
-        <form id="search-form" class="search-bar" autocomplete="off">
-          <input id="search-input" type="search" inputmode="search"
-                 placeholder="Search a game…  e.g. God of War"
-                 aria-label="Search for a game" />
-          <button id="search-btn" type="submit" class="btn-primary" aria-label="Search">Search</button>
+        <form id="search-form" class="search-bar" autocomplete="off" role="search">
+          <div class="search-wrap">
+            <input id="search-input" type="search" inputmode="search"
+                   placeholder="Start typing… e.g. God of War"
+                   aria-label="Search for a game" aria-autocomplete="list" />
+            <ul id="suggest" class="suggest" hidden></ul>
+          </div>
+          <button id="search-btn" type="submit" class="btn-primary" aria-label="Search">Go</button>
         </form>
 
         <div id="search-status" class="status" hidden></div>
-        <ul id="results" class="results" hidden></ul>
-
         <p class="hint">Try: Elden Ring · The Last of Us · Hades · Gran Turismo</p>
       </div>
     </section>
@@ -46,7 +46,7 @@
     <!-- ======================= DETAIL ======================= -->
     <section id="view-detail" class="view">
       <header class="topbar">
-        <button class="btn-back" data-nav="home" aria-label="Back to search">‹ Search</button>
+        <button class="btn-back" data-nav="back" aria-label="Back">‹ Back</button>
       </header>
       <div id="detail-body" class="detail-body"></div>
     </section>
@@ -54,16 +54,32 @@
     <!-- ======================= RECOMMENDATIONS ======================= -->
     <section id="view-recs" class="view">
       <header class="topbar">
-        <button class="btn-back" data-nav="back-detail" aria-label="Back">‹ Back</button>
+        <button class="btn-back" data-nav="back" aria-label="Back">‹ Back</button>
         <button id="share-btn" class="btn-ghost" aria-label="Share">Share</button>
       </header>
       <h2 id="recs-heading" class="recs-heading"></h2>
+      <p class="recs-sub">Press &amp; hold a game to peek at in-game screenshots · tap to open</p>
       <div id="recs-grid" class="recs-grid"></div>
     </section>
 
-    <!-- loading + toast overlays -->
+    <!-- overlays -->
     <div id="spinner" class="spinner" hidden><div class="ring"></div></div>
     <div id="toast" class="toast" hidden></div>
+
+    <!-- long-press screenshot preview -->
+    <div id="preview" class="preview" hidden>
+      <div class="preview-name" id="preview-name"></div>
+      <div class="preview-shots" id="preview-shots"></div>
+    </div>
+
+    <!-- fullscreen gallery lightbox -->
+    <div id="lightbox" class="lightbox" hidden>
+      <button class="lb-close" id="lb-close" aria-label="Close">✕</button>
+      <button class="lb-nav lb-prev" id="lb-prev" aria-label="Previous">‹</button>
+      <img id="lb-img" class="lb-img" alt="" />
+      <button class="lb-nav lb-next" id="lb-next" aria-label="Next">›</button>
+      <div class="lb-counter" id="lb-counter"></div>
+    </div>
   </div>
 
   <script src="config.js"></script>

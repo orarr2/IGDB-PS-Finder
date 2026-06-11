@@ -1,0 +1,74 @@
+name: Build Android APK
+
+# Wraps the live PWA into an Android app (Trusted Web Activity) using Bubblewrap
+# and uploads the installable APK as a downloadable artifact.
+#
+# Run it manually: Actions tab → "Build Android APK" → Run workflow.
+# When it finishes, open the run → Artifacts → download "ps-recommender-apk",
+# unzip, and sideload the .apk on your Android phone.
+#
+# Note: this produces a self-signed APK for sideloading/review (Android will ask
+# you to allow "install from unknown sources"). The app renders the real website
+# in Chrome, so screenshots/cover art are full quality.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli@latest
+
+      - name: Point Bubblewrap at the runner's pre-installed JDK & Android SDK
+        run: |
+          mkdir -p "$HOME/.bubblewrap"
+          cat > "$HOME/.bubblewrap/config.json" <<EOF
+          { "jdkPath": "${JAVA_HOME}", "androidSdkPath": "${ANDROID_SDK_ROOT}" }
+          EOF
+          yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+
+      - name: Generate a signing key
+        working-directory: android
+        run: |
+          keytool -genkeypair -v \
+            -keystore android.keystore \
+            -alias psrecommender \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass psrecommender -keypass psrecommender \
+            -dname "CN=PS Recommender, OU=App, O=orarr2, L=NA, S=NA, C=NA"
+
+      - name: Build the APK
+        working-directory: android
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: psrecommender
+          BUBBLEWRAP_KEY_PASSWORD: psrecommender
+        run: |
+          bubblewrap build --skipPwaValidation
+          ls -la
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps-recommender-apk
+          path: |
+            android/app-release-signed.apk
+            android/app-release-unsigned.apk
+          if-no-files-found: warn
