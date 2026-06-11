@@ -1,0 +1,59 @@
+name: Collect player media
+
+# Collects player-captured screenshots (links + attribution) from Steam Community
+# and Reddit, and commits the result (ml/user_media.json) back to the branch.
+# That JSON is then loaded into public.user_media, shown in the app's
+# "Player captures" section.
+#
+# Default run is a PILOT over the most-reviewed games. Run a wider pass via
+# Actions → "Collect player media" → Run workflow (set mode=all).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "pilot or all"
+        default: "pilot"
+      pilot_n:
+        description: "games in pilot"
+        default: "30"
+  push:
+    branches:
+      - claude/github-project-ios-app-jfyprv
+    paths:
+      - "ml/collect_user_media.py"
+      - ".github/workflows/collect-user-media.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: Collect links
+        env:
+          SUPABASE_URL: https://zttqvoqpwtxchxsglard.supabase.co
+          SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0dHF2b3Fwd3R4Y2h4c2dsYXJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDk0NzQsImV4cCI6MjA5NjY4NTQ3NH0.CU2rcRgQtGcHmwY6thpf-NNKLnb-WtJzzj8WrzxO3Qo
+          MODE: ${{ github.event.inputs.mode || 'pilot' }}
+          PILOT_N: ${{ github.event.inputs.pilot_n || '30' }}
+          PER_GAME: "4"
+        run: python ml/collect_user_media.py
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ml/user_media.json
+          git commit -m "Add collected user_media links [skip ci]" || { echo "no changes"; exit 0; }
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-media
+          path: ml/user_media.json
+          if-no-files-found: warn

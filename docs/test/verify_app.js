@@ -59,6 +59,11 @@ const RECS = [
   mkRec(11, 113114, "Ghost of Tsushima", 2020, "89.4", ["Adventure"]),
 ];
 
+const MEDIA = [
+  { source: "steam", image_url: "https://steamuserimages-a.akamaihd.net/ugc/aaa.jpg", thumb_url: "https://steamuserimages-a.akamaihd.net/ugc/aaa.jpg", author: "Steam player", source_url: "https://steamcommunity.com/sharedfiles/filedetails/?id=1", caption: null },
+  { source: "reddit", image_url: "https://i.redd.it/bbb.jpg", thumb_url: null, author: "u/gamer", source_url: "https://www.reddit.com/r/PS5/x", caption: "my best shot" },
+];
+
 const calls = [];
 function fakeFetch(url) {
   calls.push(url);
@@ -66,6 +71,7 @@ function fakeFetch(url) {
   if (url.includes("/rpc/search_games")) data = SEARCH;
   else if (url.includes("/rpc/get_visual_recommendations")) data = RECS.slice(0, 12);
   else if (url.includes("/rpc/get_recommendations")) data = RECS;
+  else if (url.includes("/rest/v1/user_media")) data = MEDIA;
   else if (url.includes("/rest/v1/games?id=eq.19560")) data = [DETAIL];
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) });
 }
@@ -105,10 +111,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const dbody = doc.querySelector("#detail-body");
   if (!dbody.textContent.includes("God of War")) fail("detail title missing");
   if (!dbody.textContent.includes("SIE Santa Monica Studio")) fail("developer missing");
-  const shots = dbody.querySelectorAll(".gallery .shot");
-  if (shots.length !== 3) fail("gallery should show 3 screenshots, got " + shots.length);
+  const shots = dbody.querySelectorAll(".gallery .shot:not(.pc-shot)");
+  if (shots.length !== 3) fail("official gallery should show 3 screenshots, got " + shots.length);
   if (dbody.querySelector(".why")) fail("source pick should NOT show a why-panel");
-  console.log("  ✓ detail renders info + screenshot gallery (no why-panel for the picked game)");
+  const pcs = dbody.querySelectorAll(".pc-shot");
+  if (pcs.length !== 2) fail("player-captures should show 2 items, got " + pcs.length);
+  if (!/Player captures/.test(dbody.textContent)) fail("player-captures section header missing");
+  if (pcs[0].getAttribute("href") !== "https://steamcommunity.com/sharedfiles/filedetails/?id=1")
+    fail("player capture should link to its source");
+  console.log("  ✓ detail renders gallery + 'Player captures' (Steam/Reddit links) section");
 
   // ---- 3. recommendations (>=10) ----
   const cta = [...dbody.querySelectorAll("button")].find((b) => /recommendation/i.test(b.textContent));

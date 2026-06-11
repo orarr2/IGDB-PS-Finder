@@ -151,6 +151,15 @@ button { font-family: inherit; cursor: pointer; }
 .shot.loaded img { opacity: 1; }
 .shot::after { content: "⤢"; position: absolute; right: 8px; bottom: 6px; color: #fff; font-size: 14px; opacity: 0.8; text-shadow: 0 1px 4px #000; }
 
+/* player captures (link out to Steam/Reddit) */
+.pc-shot { display: block; text-decoration: none; }
+.pc-shot::after { content: "↗"; }
+.pc-tag {
+  position: absolute; top: 6px; left: 6px; z-index: 1;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.3px; color: #fff;
+  background: rgba(0, 0, 0, 0.6); padding: 3px 8px; border-radius: 7px;
+}
+
 /* ---------- recommendations ---------- */
 .recs-heading { margin: 8px 18px 2px; font-size: 20px; font-weight: 800; color: #fff; }
 

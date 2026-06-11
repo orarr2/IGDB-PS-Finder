@@ -55,6 +55,12 @@
   function searchGames(q, lim) { return rpc("search_games", { q: q, lim: lim || 8 }); }
   function recommend(id) { return rpc("get_recommendations", { source_id: id, lim: REC_COUNT }); }
   function recommendVisual(id) { return rpc("get_visual_recommendations", { source_id: id, lim: REC_COUNT }); }
+  function userMedia(id) {
+    var cols = "source,image_url,thumb_url,author,source_url,caption";
+    var u = URL_BASE + "/rest/v1/user_media?game_id=eq." + encodeURIComponent(id) +
+      "&select=" + encodeURIComponent(cols) + "&limit=12";
+    return fetch(u, { headers: headers() }).then(checkJson);
+  }
 
   // ---------- helpers ----------
   function $(s) { return document.querySelector(s); }
@@ -257,9 +263,44 @@
       body.appendChild(gsec);
     }
 
+    // Player captures (Steam Community + Reddit) — links only, loaded async.
+    var pcSec = el("div", "section");
+    pcSec.hidden = true;
+    pcSec.appendChild(el("h3", "section-h", "📸 Player captures · Steam & Reddit"));
+    var pcStrip = el("div", "gallery");
+    pcSec.appendChild(pcStrip);
+    body.appendChild(pcSec);
+    loadUserMedia(game, pcSec, pcStrip);
+
     var cta = el("button", "btn-primary btn-block", "See " + REC_COUNT + " recommendations  →");
     cta.addEventListener("click", function () { openRecs(game); });
     body.appendChild(cta);
+  }
+
+  function loadUserMedia(game, sec, strip) {
+    userMedia(game.id).then(function (list) {
+      if (!list || !list.length) return; // stays hidden if none
+      list.forEach(function (m) {
+        var cell = document.createElement("a");
+        cell.className = "shot pc-shot";
+        cell.href = m.source_url || m.image_url;
+        cell.target = "_blank"; cell.rel = "noopener";
+        cell.title = (m.caption || "") + (m.author ? "  — " + m.author : "");
+        var im = new Image();
+        im.alt = m.caption || (game.name + " — player capture");
+        im.loading = "lazy"; im.decoding = "async";
+        im.onload = function () { cell.classList.add("loaded"); };
+        im.onerror = function () {
+          cell.remove();
+          if (!strip.children.length) sec.hidden = true;
+        };
+        im.src = m.thumb_url || m.image_url;
+        cell.appendChild(im);
+        cell.appendChild(el("span", "pc-tag", m.source === "steam" ? "Steam" : "Reddit"));
+        strip.appendChild(cell);
+      });
+      sec.hidden = false;
+    }).catch(function () {});
   }
 
   // ---------- why-recommended explanation ----------
