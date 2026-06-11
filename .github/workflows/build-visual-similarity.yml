@@ -17,7 +17,7 @@ on:
         default: "0"
   push:
     branches:
-      - claude/github-project-ios-app-jfyprv
+      - main
     paths:
       - "ml/visual_similarity.py"
       - "ml/requirements.txt"

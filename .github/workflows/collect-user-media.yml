@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - claude/github-project-ios-app-jfyprv
+      - main
     paths:
       - "ml/collect_user_media.py"
       - "ml/pilot_games.json"
