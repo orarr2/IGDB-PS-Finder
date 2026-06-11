@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -38,11 +39,25 @@ S = requests.Session()
 S.headers.update({"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9"})
 
 FILEDETAILS = re.compile(r'https://steamcommunity\.com/sharedfiles/filedetails/\?id=\d+')
-# full-resolution screenshot URLs live on the details page's og:image
-OG_IMAGE = re.compile(r'<meta property="og:image"\s+content="([^"]+)"')
-# the user/profile that posted it
-AUTHOR = re.compile(r'<div class="creatorsBlock">.*?<div class="friendBlockContent">\s*([^<\r\n]+)',
-                    re.S)
+# player screenshot image URLs (newer CDN); the base path (without the ?imw/imh
+# sizing query) is the full-resolution original.
+UGC_IMG = re.compile(r'https://images\.steamusercontent\.com/ugc/[0-9A-Za-z/_\-]+')
+
+
+def get(url, tries=3):
+    """GET with light retry/backoff (Steam throttles bursts of requests)."""
+    for i in range(tries):
+        try:
+            r = S.get(url, timeout=25)
+            if r.status_code == 200:
+                return r.text
+            if r.status_code in (429, 403, 503):
+                time.sleep(4 * (i + 1) + random.random())
+                continue
+            return r.text
+        except Exception:
+            time.sleep(2 * (i + 1))
+    return ""
 
 
 def log(*a):
@@ -88,54 +103,30 @@ def steam_appid(name: str):
     return None
 
 
-def screenshot_ids(appid: int):
-    """Top community screenshots via the homecontent AJAX endpoint."""
+def steam_screenshots(appid: int, n: int):
+    """Top community screenshots via one homecontent request — image URLs and
+    their source links are parsed straight from the listing (no per-screenshot
+    page visits, so far fewer requests = far less throttling)."""
     url = (f"https://steamcommunity.com/app/{appid}/homecontent/"
            f"?userreviewsoffset=0&p=1&screenshotspage=1&numperpage=12"
            f"&browsefilter=toprated&appHubSubSection=2&l=english"
            f"&appid={appid}&forceanon=1")
-    try:
-        html = S.get(url, timeout=25).text
-    except Exception as e:
-        log("   homecontent error:", e)
-        return []
-    seen, out = set(), []
-    for m in FILEDETAILS.findall(html):
-        if m not in seen:
-            seen.add(m)
-            out.append(m)
-    return out
-
-
-def full_image(filedetails_url: str):
-    try:
-        html = S.get(filedetails_url + "&l=english", timeout=20).text
-    except Exception:
-        return None, None
-    img = OG_IMAGE.search(html)
-    if not img:
-        return None, None
-    url = img.group(1).split("?")[0]  # strip sizing query for full res
-    auth = AUTHOR.search(html)
-    return url, (auth.group(1).strip() if auth else "Steam player")
-
-
-def steam_screenshots(appid: int, n: int):
-    ids = screenshot_ids(appid)
+    html = get(url)
+    files = FILEDETAILS.findall(html)
+    imgs, seen = [], set()
+    for m in UGC_IMG.findall(html):
+        base = m  # already excludes the ?imw/imh query → full-res original
+        if base not in seen:
+            seen.add(base)
+            imgs.append(base)
     out = []
-    for fd in ids:
-        if len(out) >= n:
-            break
-        img, author = full_image(fd)
-        time.sleep(0.3)
-        if not img:
-            continue
+    for i, img in enumerate(imgs[:n]):
         out.append({
             "source": "steam",
             "image_url": img,
             "thumb_url": img,
-            "author": author,
-            "source_url": fd,
+            "author": "Steam player",
+            "source_url": files[i] if i < len(files) else url,
             "caption": None,
         })
     return out
@@ -161,7 +152,7 @@ def main() -> int:
             covered += 1
         log(f"  [{gi}/{len(games)}] {name[:34]:34} "
             f"appid={hit[0] if hit else '-':>8}  shots={len(rows)}")
-        time.sleep(0.4)
+        time.sleep(1.6 + random.random() * 1.6)  # gentle on Steam's rate limits
 
     payload = {"source": "steam", "per_game": PER_GAME, "items": items,
                "covered": covered, "games": len(games)}
