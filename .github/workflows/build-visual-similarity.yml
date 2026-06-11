@@ -40,9 +40,8 @@ jobs:
       - name: Install deps
         run: |
           pip install -r ml/requirements.txt
-          pip install torch torchvision onnx --index-url https://download.pytorch.org/whl/cpu || \
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install onnx
+          pip install onnx onnxscript
 
       - name: Compute embeddings, neighbours and export ONNX
         env:
