@@ -13,6 +13,12 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/github-project-ios-app-jfyprv
+    paths:
+      - "android/**"
+      - ".github/workflows/build-android-apk.yml"
 
 permissions:
   contents: read
