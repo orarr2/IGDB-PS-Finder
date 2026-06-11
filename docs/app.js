@@ -61,6 +61,19 @@
       "&select=" + encodeURIComponent(cols) + "&limit=12";
     return fetch(u, { headers: headers() }).then(checkJson);
   }
+  // visual-similarity cosine scores for a source game's neighbours → {id: cos}
+  function fetchVisScores(id) {
+    var u = URL_BASE + "/rest/v1/visual_neighbors?game_id=eq." + encodeURIComponent(id) +
+      "&select=neighbor_ids,scores&limit=1";
+    return fetch(u, { headers: headers() }).then(checkJson).then(function (rows) {
+      var map = {};
+      if (rows && rows[0]) {
+        var ids = rows[0].neighbor_ids || [], sc = rows[0].scores || [];
+        for (var i = 0; i < ids.length; i++) map[String(ids[i])] = sc[i];
+      }
+      return map;
+    }).catch(function () { return {}; });
+  }
 
   // ---------- helpers ----------
   function $(s) { return document.querySelector(s); }
@@ -68,6 +81,7 @@
   function rating(v) { var n = parseFloat(v); return isFinite(n) ? String(Math.round(n)) : null; }
   function arr(v) { return Array.isArray(v) ? v : []; }
   function intersect(a, b) { var B = arr(b); return arr(a).filter(function (x) { return B.indexOf(x) !== -1; }); }
+  function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
   function listText(items, max) {
     items = items.slice(0, max || 3);
     if (items.length === 1) return items[0];
@@ -303,12 +317,70 @@
     }).catch(function () {});
   }
 
+  // ---------- match score ----------
+  // Blends three signals into one transparent "% match": gameplay look-alike
+  // (visual similarity — the main factor), shared genres, and release-year
+  // closeness. Returns the overall % plus each component for the breakdown.
+  function matchInfo(rec, src) {
+    if (!src) src = {};
+    var cos = currentVisScores[String(rec.id)];
+    var sg = intersect(rec.genres, src.genres);
+    var gMax = Math.min(3, Math.max(1, arr(src.genres).length));
+    var genreOverlap = clamp(sg.length / gMax, 0, 1);
+    var yd = (rec.release_year && src.release_year) ? Math.abs(rec.release_year - src.release_year) : null;
+    var yearClose = yd == null ? 0 : clamp(1 - yd / 15, 0, 1);
+    var vis = (typeof cos === "number") ? clamp((cos - 0.5) / 0.45, 0, 1) : null;
+    var pct = vis != null
+      ? 0.65 * vis + 0.20 * genreOverlap + 0.15 * yearClose
+      : 0.60 * genreOverlap + 0.40 * yearClose;
+    return {
+      pct: Math.round(pct * 100),
+      visPct: vis != null ? Math.round(vis * 100) : null,
+      genrePct: Math.round(genreOverlap * 100),
+      yearPct: Math.round(yearClose * 100),
+      sharedGenres: sg, yearDiff: yd,
+    };
+  }
+
+  function scoreRow(label, pct, sub) {
+    var row = el("div", "score-row");
+    row.appendChild(el("span", "score-label", label));
+    var bar = el("div", "score-bar");
+    var fill = el("div", "score-fill");
+    fill.style.width = clamp(pct, 0, 100) + "%";
+    bar.appendChild(fill);
+    row.appendChild(bar);
+    row.appendChild(el("span", "score-val", pct + "%"));
+    if (sub) row.appendChild(el("div", "score-sub", sub));
+    return row;
+  }
+
+  function scoreBlock(rec, src) {
+    var mi = rec._match || matchInfo(rec, src);
+    var wrap = el("div", "score-block");
+    var head = el("div", "score-head");
+    head.appendChild(el("span", "score-big", mi.pct + "%"));
+    head.appendChild(el("span", "score-cap", "match with " + (src && src.name ? src.name : "your pick")));
+    wrap.appendChild(head);
+    var rows = el("div", "score-rows");
+    if (mi.visPct != null)
+      rows.appendChild(scoreRow("🖼️ Gameplay look-alike", mi.visPct, "main factor — how similar the in-game screenshots are"));
+    rows.appendChild(scoreRow("🎮 Shared genres", mi.genrePct,
+      mi.sharedGenres.length ? mi.sharedGenres.slice(0, 3).join(", ") : "none in common"));
+    if (mi.yearDiff != null)
+      rows.appendChild(scoreRow("📅 Release era", mi.yearPct,
+        rec.release_year + " · " + mi.yearDiff + " year" + (mi.yearDiff === 1 ? "" : "s") + " apart"));
+    wrap.appendChild(rows);
+    return wrap;
+  }
+
   // ---------- why-recommended explanation ----------
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
   function whyPanel(rec, src, mode) {
     if (mode === "visual") return whyPanelVisual(rec, src);
     var panel = el("div", "why");
     panel.appendChild(el("h3", "why-h", "✨ Why we picked this for you"));
+    panel.appendChild(scoreBlock(rec, src));
 
     var reasons = [];
     var isSimilar = arr(src.similar_games).map(String).indexOf(String(rec.id)) !== -1;
@@ -341,6 +413,7 @@
   function whyPanelVisual(rec, src) {
     var panel = el("div", "why why-visual");
     panel.appendChild(el("h3", "why-h", "🧠 Why it looks like this"));
+    panel.appendChild(scoreBlock(rec, src));
 
     var reasons = [];
     reasons.push("Its <b>in-game screenshots</b> are visually closest to <b>" + esc(src.name) +
@@ -365,7 +438,8 @@
 
   // ============================================================ RECOMMENDATIONS
   var currentRecs = [];
-  var currentMode = "smart";
+  var currentMode = "visual";
+  var currentVisScores = {};
 
   function setActiveSeg(mode) {
     document.querySelectorAll("#rec-mode .seg").forEach(function (b) {
@@ -376,9 +450,16 @@
   function openRecs(source) {
     sourceGame = source;
     $("#recs-heading").textContent = "Because you like “" + source.name + "”";
-    setActiveSeg("smart");
     push("recs");
-    loadMode("smart");
+    // Look-alike (visual) is the headline mode; grab its cosine scores first.
+    showSpinner(true);
+    fetchVisScores(source.id).then(function (map) {
+      currentVisScores = map || {};
+      showSpinner(false);
+      var hasVisual = Object.keys(currentVisScores).length > 0;
+      setActiveSeg(hasVisual ? "visual" : "smart");
+      loadMode(hasVisual ? "visual" : "smart");
+    });
   }
 
   function loadMode(mode) {
@@ -392,10 +473,9 @@
       showSpinner(false);
       currentRecs = recs || [];
       if (!currentRecs.length) {
+        if (mode === "visual") { setActiveSeg("smart"); loadMode("smart"); return; }
         note.hidden = false;
-        note.innerHTML = mode === "visual"
-          ? "🧠 Visual-AI picks aren't ready for this game yet — they're computed offline from its screenshots. Try <b>Smart match</b>."
-          : "Couldn't generate recommendations.";
+        note.innerHTML = "Couldn't generate recommendations.";
         return;
       }
       renderRecs(currentRecs);
@@ -407,7 +487,12 @@
     grid.innerHTML = "";
     recs.forEach(function (g) {
       var card = el("div", "card");
-      card.appendChild(coverEl(g, "cover_big", 160, 226));
+      var cover = coverEl(g, "cover_big", 160, 226);
+      var mi = matchInfo(g, sourceGame);
+      g._match = mi;
+      var badge = el("div", "match-badge " + (mi.pct >= 75 ? "hi" : mi.pct >= 50 ? "mid" : "lo"), mi.pct + "% match");
+      cover.appendChild(badge);
+      card.appendChild(cover);
       card.appendChild(el("div", "card-name", g.name));
       var sub = [];
       if (g.release_year) sub.push(String(g.release_year));

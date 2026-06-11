@@ -64,6 +64,12 @@ const MEDIA = [
   { source: "reddit", image_url: "https://i.redd.it/bbb.jpg", thumb_url: null, author: "u/gamer", source_url: "https://www.reddit.com/r/PS5/x", caption: "my best shot" },
 ];
 
+// visual_neighbors row for the source (19560): cosine scores for the rec ids
+const VISN = [{
+  neighbor_ids: RECS.map((r) => r.id),
+  scores: RECS.map((_, i) => Number((0.95 - i * 0.03).toFixed(4))),
+}];
+
 const calls = [];
 function fakeFetch(url) {
   calls.push(url);
@@ -71,6 +77,7 @@ function fakeFetch(url) {
   if (url.includes("/rpc/search_games")) data = SEARCH;
   else if (url.includes("/rpc/get_visual_recommendations")) data = RECS.slice(0, 12);
   else if (url.includes("/rpc/get_recommendations")) data = RECS;
+  else if (url.includes("/rest/v1/visual_neighbors")) data = VISN;
   else if (url.includes("/rest/v1/user_media")) data = MEDIA;
   else if (url.includes("/rest/v1/games?id=eq.19560")) data = [DETAIL];
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) });
@@ -121,50 +128,44 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     fail("player capture should link to its source");
   console.log("  ✓ detail renders gallery + 'Player captures' (Steam/Reddit links) section");
 
-  // ---- 3. recommendations (>=10) ----
+  // ---- 3. recommendations (default = visual look-alike) + match badges ----
   const cta = [...dbody.querySelectorAll("button")].find((b) => /recommendation/i.test(b.textContent));
   if (!cta) fail("recommendations button missing");
   cta.dispatchEvent(new window.Event("click"));
-  await sleep(40);
+  await sleep(80); // fetchVisScores → loadMode(visual)
   if (!doc.querySelector("#view-recs.active")) fail("did not open recs");
+  if (!calls.join("\n").includes("/rest/v1/visual_neighbors")) fail("did not fetch visual scores");
+  if (!calls.join("\n").includes("/rpc/get_visual_recommendations")) fail("default mode should be visual look-alike");
   const cards = doc.querySelectorAll("#recs-grid .card");
-  if (cards.length < 10) fail("need at least 10 recommendations, got " + cards.length);
   if (cards.length !== 12) fail("expected 12 recommendations, got " + cards.length);
-  console.log("  ✓ shows " + cards.length + " recommendations (>= 10)");
+  const badges = doc.querySelectorAll("#recs-grid .match-badge");
+  if (badges.length !== 12) fail("every card needs a match badge, got " + badges.length);
+  if (!/%\s*match/i.test(badges[0].textContent)) fail("badge should read 'NN% match', got " + badges[0].textContent);
+  console.log("  ✓ 12 recommendations, each with a '% match' badge (visual default)");
 
-  // ---- 4. tap a card → detail with WHY panel ----
+  // ---- 4. tap a card → detail shows the score breakdown ----
   cards[0].dispatchEvent(new window.Event("click"));
   await sleep(40);
   const why = doc.querySelector("#detail-body .why");
   if (!why) fail("recommended game's detail must show a why-panel");
-  const wt = why.textContent;
-  if (!/Why we picked this/i.test(wt)) fail("why-panel heading missing");
-  if (!/directly similar/i.test(wt)) fail("why-panel should note the direct-similarity match");
-  if (!/SIE Santa Monica Studio/.test(wt)) fail("why-panel should note shared studio");
-  if (!/\+1000/.test(wt)) fail("why-panel should explain the scoring weights");
-  console.log("  ✓ recommended game shows 'Why we picked this' with real, specific reasons");
+  const sb = why.querySelector(".score-block");
+  if (!sb) fail("why-panel must show the score breakdown block");
+  if (!/% match|match with/i.test(sb.textContent)) fail("score block should show the % match");
+  if (!/Gameplay look-alike/i.test(sb.textContent)) fail("score block should list gameplay look-alike as a factor");
+  if (!/Shared genres/i.test(sb.textContent)) fail("score block should list shared genres");
+  if (!/Release era/i.test(sb.textContent)) fail("score block should list release-year closeness");
+  console.log("  ✓ recommendation detail shows a clear match-score breakdown (visual + genre + year)");
 
-  // ---- 4b. visual "Looks alike" toggle ----
-  // go back to the recommendations screen first
+  // ---- 4b. Smart match toggle still works ----
   doc.querySelector("#view-detail .btn-back").dispatchEvent(new window.Event("click"));
   await sleep(20);
-  const visSeg = [...doc.querySelectorAll("#rec-mode .seg")].find((b) => b.dataset.mode === "visual");
-  if (!visSeg) fail("visual toggle missing");
-  visSeg.dispatchEvent(new window.Event("click"));
+  const smartSeg = [...doc.querySelectorAll("#rec-mode .seg")].find((b) => b.dataset.mode === "smart");
+  if (!smartSeg) fail("smart toggle missing");
+  smartSeg.dispatchEvent(new window.Event("click"));
   await sleep(40);
-  if (!calls.join("\n").includes("/rpc/get_visual_recommendations")) fail("visual endpoint never called");
-  const visCards = doc.querySelectorAll("#recs-grid .card");
-  if (visCards.length !== 12) fail("visual mode should render 12 cards, got " + visCards.length);
-  console.log("  ✓ 'Looks alike' toggle calls get_visual_recommendations and renders cards");
-
-  // tap a visual card → visual why-panel
-  visCards[0].dispatchEvent(new window.Event("click"));
-  await sleep(40);
-  const vwhy = doc.querySelector("#detail-body .why");
-  if (!vwhy) fail("visual recommendation should show a why-panel");
-  if (!/looks like|visual/i.test(vwhy.textContent)) fail("visual why-panel should explain visual similarity");
-  if (!/visual fingerprint|neural network/i.test(vwhy.textContent)) fail("visual why-panel should describe the CNN method");
-  console.log("  ✓ visual recommendation shows the computer-vision 'why' explanation");
+  if (!calls.join("\n").includes("/rpc/get_recommendations")) fail("smart endpoint never called");
+  if (doc.querySelectorAll("#recs-grid .card").length !== 12) fail("smart mode should render 12 cards");
+  console.log("  ✓ 'Smart match' toggle calls get_recommendations and renders cards");
   // return to recs for the rest of the checks
   doc.querySelector("#view-detail .btn-back").dispatchEvent(new window.Event("click"));
   await sleep(20);
