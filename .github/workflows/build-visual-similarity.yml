@@ -1,0 +1,66 @@
+name: Compute visual similarity
+
+# Runs the computer-vision pipeline (download IGDB gameplay screenshots → CNN
+# embeddings → nearest visual neighbours) and commits the result
+# (ml/visual_neighbors.json) back to the branch. That JSON is then loaded into
+# the Supabase `visual_neighbors` table, which the app reads via
+# get_visual_recommendations().
+#
+# Run manually: Actions → "Compute visual similarity" → Run workflow
+# (optionally set `limit` to a small number for a quick test).
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Cap number of games (0 = all)"
+        default: "0"
+  push:
+    branches:
+      - claude/github-project-ios-app-jfyprv
+    paths:
+      - "ml/visual_similarity.py"
+      - "ml/requirements.txt"
+      - ".github/workflows/build-visual-similarity.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install -r ml/requirements.txt
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Compute embeddings and neighbours
+        env:
+          SUPABASE_URL: https://zttqvoqpwtxchxsglard.supabase.co
+          SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0dHF2b3Fwd3R4Y2h4c2dsYXJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDk0NzQsImV4cCI6MjA5NjY4NTQ3NH0.CU2rcRgQtGcHmwY6thpf-NNKLnb-WtJzzj8WrzxO3Qo
+          SHOTS: "3"
+          TOPK: "12"
+          LIMIT: ${{ github.event.inputs.limit || '0' }}
+        run: python ml/visual_similarity.py
+
+      - name: Commit results back to the branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ml/visual_neighbors.json
+          git commit -m "Add computed visual_neighbors data [skip ci]" || { echo "no changes"; exit 0; }
+          git push
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visual-neighbors
+          path: ml/visual_neighbors.json
+          if-no-files-found: warn

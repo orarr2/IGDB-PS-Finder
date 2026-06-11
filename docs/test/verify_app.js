@@ -64,6 +64,7 @@ function fakeFetch(url) {
   calls.push(url);
   let data = [];
   if (url.includes("/rpc/search_games")) data = SEARCH;
+  else if (url.includes("/rpc/get_visual_recommendations")) data = RECS.slice(0, 12);
   else if (url.includes("/rpc/get_recommendations")) data = RECS;
   else if (url.includes("/rest/v1/games?id=eq.19560")) data = [DETAIL];
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) });
@@ -131,6 +132,31 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!/SIE Santa Monica Studio/.test(wt)) fail("why-panel should note shared studio");
   if (!/\+1000/.test(wt)) fail("why-panel should explain the scoring weights");
   console.log("  ✓ recommended game shows 'Why we picked this' with real, specific reasons");
+
+  // ---- 4b. visual "Looks alike" toggle ----
+  // go back to the recommendations screen first
+  doc.querySelector("#view-detail .btn-back").dispatchEvent(new window.Event("click"));
+  await sleep(20);
+  const visSeg = [...doc.querySelectorAll("#rec-mode .seg")].find((b) => b.dataset.mode === "visual");
+  if (!visSeg) fail("visual toggle missing");
+  visSeg.dispatchEvent(new window.Event("click"));
+  await sleep(40);
+  if (!calls.join("\n").includes("/rpc/get_visual_recommendations")) fail("visual endpoint never called");
+  const visCards = doc.querySelectorAll("#recs-grid .card");
+  if (visCards.length !== 12) fail("visual mode should render 12 cards, got " + visCards.length);
+  console.log("  ✓ 'Looks alike' toggle calls get_visual_recommendations and renders cards");
+
+  // tap a visual card → visual why-panel
+  visCards[0].dispatchEvent(new window.Event("click"));
+  await sleep(40);
+  const vwhy = doc.querySelector("#detail-body .why");
+  if (!vwhy) fail("visual recommendation should show a why-panel");
+  if (!/looks like|visual/i.test(vwhy.textContent)) fail("visual why-panel should explain visual similarity");
+  if (!/visual fingerprint|neural network/i.test(vwhy.textContent)) fail("visual why-panel should describe the CNN method");
+  console.log("  ✓ visual recommendation shows the computer-vision 'why' explanation");
+  // return to recs for the rest of the checks
+  doc.querySelector("#view-detail .btn-back").dispatchEvent(new window.Event("click"));
+  await sleep(20);
 
   // ---- 5. lightbox ----
   window.__app.openLightbox(DETAIL.screenshot_ids, 0, DETAIL.name);

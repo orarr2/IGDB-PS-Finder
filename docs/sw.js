@@ -6,8 +6,8 @@
  *   - Everything else (Supabase API, IGDB cover images): network-first with a
  *     runtime cache fallback, so previously seen covers survive offline.
  */
-var SHELL = "ps-recommender-shell-v2";
-var RUNTIME = "ps-recommender-runtime-v2";
+var SHELL = "ps-recommender-shell-v3";
+var RUNTIME = "ps-recommender-runtime-v3";
 
 var SHELL_ASSETS = [
   "./",

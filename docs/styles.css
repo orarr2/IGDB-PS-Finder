@@ -153,6 +153,25 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------- recommendations ---------- */
 .recs-heading { margin: 8px 18px 2px; font-size: 20px; font-weight: 800; color: #fff; }
+
+.segmented {
+  display: flex; gap: 6px; margin: 10px 18px 2px; padding: 4px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 12px;
+}
+.segmented .seg {
+  flex: 1; padding: 9px 10px; border: none; border-radius: 9px; cursor: pointer;
+  background: transparent; color: var(--muted); font-size: 13.5px; font-weight: 700;
+}
+.segmented .seg.active {
+  color: #fff; background: linear-gradient(90deg, var(--blue), var(--blue2));
+  box-shadow: 0 4px 14px rgba(0,114,206,0.35);
+}
+.recs-note {
+  margin: 12px 18px; padding: 14px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5;
+  color: #d4e2ff; background: rgba(0,114,206,0.10); border: 1px solid rgba(0,168,232,0.35);
+}
+.why-visual { background: linear-gradient(135deg, rgba(124,77,255,0.16), rgba(0,168,232,0.08)); border-color: rgba(124,77,255,0.45); }
+
 .recs-sub { margin: 0 18px 6px; color: var(--muted); font-size: 12.5px; }
 .recs-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 12px 18px calc(var(--safe-bottom) + 40px); }
 @media (min-width: 560px) { .recs-grid { grid-template-columns: repeat(3, 1fr); } }

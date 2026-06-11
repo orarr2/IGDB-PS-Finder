@@ -54,6 +54,7 @@
   }
   function searchGames(q, lim) { return rpc("search_games", { q: q, lim: lim || 8 }); }
   function recommend(id) { return rpc("get_recommendations", { source_id: id, lim: REC_COUNT }); }
+  function recommendVisual(id) { return rpc("get_visual_recommendations", { source_id: id, lim: REC_COUNT }); }
 
   // ---------- helpers ----------
   function $(s) { return document.querySelector(s); }
@@ -192,12 +193,13 @@
   }
 
   // whyAgainst: when set, render the "why recommended" panel relative to it.
-  function openDetail(game, whyAgainst) {
-    renderDetail(game, whyAgainst || null);
+  // mode: "smart" (tag match) or "visual" (look-alike) — changes the explanation.
+  function openDetail(game, whyAgainst, mode) {
+    renderDetail(game, whyAgainst || null, mode || "smart");
     push("detail");
   }
 
-  function renderDetail(game, whyAgainst) {
+  function renderDetail(game, whyAgainst, mode) {
     var body = $("#detail-body");
     body.innerHTML = "";
 
@@ -225,7 +227,7 @@
     body.appendChild(head);
 
     // WHY panel — right after the score & genres, before the summary.
-    if (whyAgainst) body.appendChild(whyPanel(game, whyAgainst));
+    if (whyAgainst) body.appendChild(whyPanel(game, whyAgainst, mode));
 
     if (game.summary) {
       var sec = el("div", "section");
@@ -262,7 +264,8 @@
 
   // ---------- why-recommended explanation ----------
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
-  function whyPanel(rec, src) {
+  function whyPanel(rec, src, mode) {
+    if (mode === "visual") return whyPanelVisual(rec, src);
     var panel = el("div", "why");
     panel.appendChild(el("h3", "why-h", "✨ Why we picked this for you"));
 
@@ -294,18 +297,67 @@
     return panel;
   }
 
+  function whyPanelVisual(rec, src) {
+    var panel = el("div", "why why-visual");
+    panel.appendChild(el("h3", "why-h", "🧠 Why it looks like this"));
+
+    var reasons = [];
+    reasons.push("Its <b>in-game screenshots</b> are visually closest to <b>" + esc(src.name) +
+      "</b> — matched on actual gameplay frames (not box art) by an image-recognition model.");
+    var genres = intersect(rec.genres, src.genres);
+    var themes = intersect(rec.themes, src.themes);
+    if (genres.length) reasons.push("They also share genres: <b>" + esc(listText(genres, 3)) + "</b>.");
+    if (themes.length) reasons.push("…and themes: <b>" + esc(listText(themes, 3)) + "</b>.");
+
+    var ul = el("ul", "why-list");
+    reasons.forEach(function (txt) { var li = document.createElement("li"); li.innerHTML = txt; ul.appendChild(li); });
+    panel.appendChild(ul);
+
+    var note = el("p", "why-note");
+    note.innerHTML = "How it works: every game's gameplay screenshots are passed through a convolutional " +
+      "neural network (MobileNetV3) that turns each image into a numeric “visual fingerprint.” " +
+      "Games are then ranked by how similar their fingerprints are (cosine similarity). This is the " +
+      "computer-vision counterpart to the tag-based <b>Smart match</b>.";
+    panel.appendChild(note);
+    return panel;
+  }
+
   // ============================================================ RECOMMENDATIONS
   var currentRecs = [];
+  var currentMode = "smart";
+
+  function setActiveSeg(mode) {
+    document.querySelectorAll("#rec-mode .seg").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-mode") === mode);
+    });
+  }
+
   function openRecs(source) {
+    sourceGame = source;
+    $("#recs-heading").textContent = "Because you like “" + source.name + "”";
+    setActiveSeg("smart");
+    push("recs");
+    loadMode("smart");
+  }
+
+  function loadMode(mode) {
+    currentMode = mode;
+    var grid = $("#recs-grid"), note = $("#recs-note");
+    grid.innerHTML = "";
+    note.hidden = true;
     showSpinner(true);
-    recommend(source.id).then(function (recs) {
+    var p = mode === "visual" ? recommendVisual(sourceGame.id) : recommend(sourceGame.id);
+    p.then(function (recs) {
       showSpinner(false);
-      if (!recs || !recs.length) { toast("Couldn't generate recommendations."); return; }
-      sourceGame = source;
-      currentRecs = recs;
-      $("#recs-heading").textContent = "Because you like “" + source.name + "”";
-      renderRecs(recs);
-      push("recs");
+      currentRecs = recs || [];
+      if (!currentRecs.length) {
+        note.hidden = false;
+        note.innerHTML = mode === "visual"
+          ? "🧠 Visual-AI picks aren't ready for this game yet — they're computed offline from its screenshots. Try <b>Smart match</b>."
+          : "Couldn't generate recommendations.";
+        return;
+      }
+      renderRecs(currentRecs);
     }).catch(function (err) { showSpinner(false); toast("Network error."); console.error(err); });
   }
 
@@ -342,7 +394,7 @@
     card.addEventListener("contextmenu", function (e) { e.preventDefault(); });
     card.addEventListener("click", function () {
       if (held) { held = false; return; } // the hold already showed a preview
-      openDetail(game, sourceGame);
+      openDetail(game, sourceGame, currentMode);
     });
     // Desktop hover convenience
     card.addEventListener("mouseenter", function () { showPreview(game); });
@@ -425,6 +477,14 @@
     initHome();
     initLightbox();
     document.querySelectorAll("[data-nav=back]").forEach(function (b) { b.addEventListener("click", back); });
+    document.querySelectorAll("#rec-mode .seg").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var mode = b.getAttribute("data-mode");
+        if (mode === currentMode) return;
+        setActiveSeg(mode);
+        loadMode(mode);
+      });
+    });
     var s = $("#share-btn"); if (s) s.addEventListener("click", doShare);
     show("home");
     if ("serviceWorker" in navigator) {
