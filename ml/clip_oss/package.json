@@ -1,0 +1,8 @@
+{
+  "name": "clip-oss-embedder",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@huggingface/transformers": "3.7.5"
+  }
+}

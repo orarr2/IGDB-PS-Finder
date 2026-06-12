@@ -1,0 +1,46 @@
+name: Build CLIP (free / OSS)
+
+# Embeds game screenshots with the open-source Xenova/clip-vit-base-patch32
+# model (transformers.js, CPU) into public.game_clip_oss. Fully free — no Jina,
+# no paid API. Resumable: re-dispatch until it reports failed=0 / no work left.
+#
+# Inputs:
+#   limit     0 = all games (default); set small (e.g. 30) for a validation run
+#   shots     screenshots per game (default 3)
+#   selfcheck "1" to verify the embed -> RPC loop at the end (default 1)
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Games to process (0 = all)"
+        default: "0"
+      shots:
+        description: "Screenshots per game"
+        default: "3"
+      selfcheck:
+        description: "Run embed->RPC self-check (1/0)"
+        default: "1"
+
+jobs:
+  embed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        working-directory: ml/clip_oss
+        run: npm install --no-audit --no-fund
+      - name: Embed catalog
+        working-directory: ml/clip_oss
+        env:
+          LIMIT: ${{ github.event.inputs.limit }}
+          SHOTS: ${{ github.event.inputs.shots }}
+          SELFCHECK: ${{ github.event.inputs.selfcheck }}
+        run: |
+          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' ../../docs/config.js)
+          export SUPABASE_KEY=$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' ../../docs/config.js)
+          node embed.mjs
