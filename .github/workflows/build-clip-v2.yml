@@ -1,0 +1,45 @@
+name: Rebuild CLIP v2
+
+# Re-embeds game screenshots with jina-clip-v2 (1024-d) through the photo-search
+# edge-function proxy, and commits the vectors (ml/clip_v2/).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ml/clip_v2.py"
+      - ".github/workflows/build-clip-v2.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests pillow
+      - name: Embed via proxy
+        env:
+          SHOTS: "4"
+        run: |
+          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' docs/config.js)
+          export SUPABASE_KEY=$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' docs/config.js)
+          python ml/clip_v2.py
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ml/clip_v2
+          git commit -m "Add jina-clip-v2 screenshot embeddings [skip ci]" || { echo "no changes"; exit 0; }
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clip-v2
+          path: ml/clip_v2/*.json
+          if-no-files-found: warn
