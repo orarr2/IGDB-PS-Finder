@@ -4,9 +4,11 @@ Function's embed-proxy (so the embedding key stays only in the function).
 Design goals (learned the hard way):
   * Resumable — already-embedded (game_id, shot) pairs are loaded from the
     existing shards and skipped, so a re-run never re-pays for finished work.
+  * Checkpointed — every CHECKPOINT successful batches the shards are rewritten
+    and committed+pushed, so a job timeout loses at most a few minutes of work
+    instead of the whole run. Repeated dispatches converge to 100%.
   * Gentle — low embed concurrency with exponential back-off, because hammering
-    the proxy with many parallel batches gets almost everything rate-limited
-    (the first attempt at high concurrency returned ~6% success).
+    the proxy with many parallel batches gets almost everything rate-limited.
   * Honest — prints a clear success ratio so a half-finished run is obvious.
 
 Output: ml/clip_v2/clip_NN.json  {"items":[{"game_id","shot","v":[1024]}]}
@@ -14,7 +16,7 @@ Env: SUPABASE_URL, SUPABASE_KEY (anon), SHOTS (default 4), LIMIT (0=all)
 """
 from __future__ import annotations
 
-import base64, glob, io, json, os, sys, threading, time
+import base64, glob, io, json, os, subprocess, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -29,6 +31,7 @@ LIMIT = int(os.environ.get("LIMIT", "0"))
 BATCH = 8            # images per proxy call (smaller = lighter on the function)
 EMBED_WORKERS = 2    # parallel proxy calls (low, to stay under the rate limit)
 ATTEMPTS = 6         # per-batch retries
+CHECKPOINT = 60      # commit+push progress every N successful batches
 OUTDIR = "ml/clip_v2"
 SHARD = 1500
 IMG = "https://images.igdb.com/igdb/image/upload/t_screenshot_med/{}.jpg"
@@ -111,20 +114,47 @@ def embed_batch(batch):
     return []
 
 
+def write_shards(merged):
+    rows = [{"game_id": g, "shot": s, "v": v} for (g, s), v in
+            sorted(merged.items(), key=lambda kv: (kv[0][0], kv[0][1]))]
+    for old in glob.glob(f"{OUTDIR}/clip_*.json"):
+        os.remove(old)
+    for s in range(0, len(rows), SHARD):
+        json.dump({"items": rows[s:s + SHARD]}, open(f"{OUTDIR}/clip_{s // SHARD:02d}.json", "w"))
+    return len(rows)
+
+
+def checkpoint(merged, final=False):
+    n = write_shards(merged)
+    try:
+        subprocess.run(["git", "config", "user.name", "orarr2"], check=False)
+        subprocess.run(["git", "config", "user.email", "orarbeli1@gmail.com"], check=False)
+        subprocess.run(["git", "add", OUTDIR], check=False)
+        msg = "Add jina-clip-v2 screenshot embeddings [skip ci]"
+        c = subprocess.run(["git", "commit", "-m", msg], capture_output=True, text=True)
+        if c.returncode == 0:
+            subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=False,
+                           capture_output=True, text=True)
+            p = subprocess.run(["git", "push", "origin", "main"], capture_output=True, text=True)
+            log(f"  checkpoint pushed: {n} vecs ({'ok' if p.returncode == 0 else p.stderr[:120]})")
+    except Exception as e:
+        log(f"  checkpoint push failed: {e}")
+    return n
+
+
 def main() -> int:
     t0 = time.time()
     os.makedirs(OUTDIR, exist_ok=True)
     games = fetch_games()
-    done = load_done()
-    log(f"{len(games)} games · {len(done)} vectors already embedded (resuming)")
+    merged = load_done()
+    log(f"{len(games)} games · {len(merged)} vectors already embedded (resuming)")
 
     jobs = []
     for g in games:
         for idx, sid in enumerate((g["screenshot_ids"] or [])[:SHOTS]):
-            if (g["id"], idx) not in done:
+            if (g["id"], idx) not in merged:
                 jobs.append((g["id"], idx, sid))
     log(f"{len(jobs)} screenshots still to embed")
-
     if not jobs:
         log("Nothing to do — already complete.")
         return 0
@@ -139,37 +169,25 @@ def main() -> int:
 
     log(f"Embedding via proxy (workers={EMBED_WORKERS}, batch={BATCH})…")
     batches = [items[i:i + BATCH] for i in range(0, len(items), BATCH)]
-    new, done_b, ok_b = [], 0, 0
+    done_b, ok_b, since_ckpt = 0, 0, 0
     with ThreadPoolExecutor(max_workers=EMBED_WORKERS) as ex:
         for res in ex.map(embed_batch, batches):
             done_b += 1
             if res:
-                ok_b += 1
-                new.extend(res)
-            if done_b % 25 == 0:
+                ok_b += 1; since_ckpt += 1
+                for gid, shot, v in res:
+                    merged[(gid, shot)] = [round(float(x), 4) for x in v]
+            if since_ckpt >= CHECKPOINT:
+                since_ckpt = 0
                 log(f"  {done_b}/{len(batches)} batches · {ok_b} ok · "
-                    f"{len(new)} new vecs · {time.time()-t0:.0f}s")
+                    f"{len(merged)} vecs · {time.time()-t0:.0f}s")
+                checkpoint(merged)
 
+    n = checkpoint(merged, final=True)
     log(f"Batch success: {ok_b}/{len(batches)}  ({100*ok_b/max(1,len(batches)):.0f}%)")
-
-    # Merge prior + new, then rewrite all shards deterministically.
-    merged = dict(done)
-    for gid, shot, v in new:
-        merged[(gid, shot)] = [round(float(x), 4) for x in v]
-    rows = [{"game_id": g, "shot": s, "v": v} for (g, s), v in
-            sorted(merged.items(), key=lambda kv: (kv[0][0], kv[0][1]))]
-
-    for old in glob.glob(f"{OUTDIR}/clip_*.json"):
-        os.remove(old)
-    for s in range(0, len(rows), SHARD):
-        p = f"{OUTDIR}/clip_{s // SHARD:02d}.json"
-        json.dump({"items": rows[s:s + SHARD]}, open(p, "w"))
-        log("wrote", p, len(rows[s:s + SHARD]))
-
-    log(f"Total v2 embeddings on disk: {len(rows)}  ({time.time()-t0:.0f}s)")
-    # Signal an incomplete run so CI / humans notice, but still commit progress.
+    log(f"Total v2 embeddings on disk: {n}  ({time.time()-t0:.0f}s)")
     if ok_b < 0.9 * len(batches):
-        log("WARNING: many batches failed — likely rate limit or exhausted credits.")
+        log("WARNING: many batches failed — re-dispatch to continue (resumable).")
     return 0
 
 
