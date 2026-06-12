@@ -680,6 +680,19 @@
     });
   }
 
+  // a centred crop (frac of each side), downscaled — focuses on the screen and
+  // gives the server several views to average (crop + TTA)
+  function cropDataUrl(img, frac, max) {
+    var w = img.naturalWidth, h = img.naturalHeight;
+    var cw = Math.max(1, Math.round(w * frac)), ch = Math.max(1, Math.round(h * frac));
+    var sx = Math.round((w - cw) / 2), sy = Math.round((h - ch) / 2);
+    var scale = Math.min(1, max / Math.max(cw, ch));
+    var dw = Math.max(1, Math.round(cw * scale)), dh = Math.max(1, Math.round(ch * scale));
+    var c = document.createElement("canvas"); c.width = dw; c.height = dh;
+    c.getContext("2d").drawImage(img, sx, sy, cw, ch, 0, 0, dw, dh);
+    try { return c.toDataURL("image/jpeg", 0.85); } catch (e) { return null; }
+  }
+
   function photoSearchUrl() { return URL_BASE + "/functions/v1/photo-search"; }
   function warmPhotoSearch() {
     try {
@@ -690,11 +703,11 @@
       }).catch(function () {});
     } catch (e) {}
   }
-  function postPhoto(dataUrl) {
+  function postPhoto(images) {
     return fetch(photoSearchUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
-      body: JSON.stringify({ image: dataUrl, lim: REC_COUNT }),
+      body: JSON.stringify({ images: images, lim: REC_COUNT }),
     }).then(function (r) {
       return r.json().then(function (d) {
         if (!r.ok) throw new Error(d && d.error ? d.error : "search failed");
@@ -706,10 +719,12 @@
   function handlePhoto(file) {
     if (!file) return;
     showSpinner(true);
-    downscaleDataUrl(file, 384).then(function (dataUrl) {
-      return postPhoto(dataUrl).catch(function () {
-        // one automatic retry — covers the first cold-start miss
-        return new Promise(function (res) { setTimeout(res, 800); }).then(function () { return postPhoto(dataUrl); });
+    fileToImage(file).then(function (r) {
+      // full view + two centred crops → server averages them
+      var images = [cropDataUrl(r.img, 1.0, 384), cropDataUrl(r.img, 0.72, 384), cropDataUrl(r.img, 0.5, 384)]
+        .filter(Boolean);
+      return postPhoto(images).catch(function () {
+        return new Promise(function (res) { setTimeout(res, 800); }).then(function () { return postPhoto(images); });
       });
     }).then(function (games) {
       showSpinner(false);
