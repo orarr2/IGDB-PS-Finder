@@ -3,13 +3,11 @@ name: Rebuild CLIP v2
 # Re-embeds game screenshots with jina-clip-v2 (1024-d) through the photo-search
 # edge-function proxy, and commits the vectors (ml/clip_v2/).
 
+# Manual-only: dispatch this after the Jina account has balance. Runs the
+# resumable rebuild (ml/clip_v2.py), which continues from whatever is already
+# committed and checkpoints progress as it goes.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ml/clip_v2.py"
-      - ".github/workflows/build-clip-v2.yml"
 
 permissions:
   contents: write
