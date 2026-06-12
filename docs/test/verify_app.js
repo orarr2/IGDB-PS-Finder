@@ -77,6 +77,7 @@ function fakeFetch(url) {
   if (url.includes("/rpc/search_games")) data = SEARCH;
   else if (url.includes("/rpc/get_visual_recommendations")) data = RECS.slice(0, 12);
   else if (url.includes("/rpc/get_recommendations")) data = RECS;
+  else if (url.includes("/rpc/get_hidden_gems")) data = RECS;
   else if (url.includes("/rest/v1/visual_neighbors")) data = VISN;
   else if (url.includes("/rest/v1/user_media")) data = MEDIA;
   else if (url.includes("/rest/v1/games?id=eq.19560")) data = [DETAIL];
@@ -166,6 +167,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!calls.join("\n").includes("/rpc/get_recommendations")) fail("smart endpoint never called");
   if (doc.querySelectorAll("#recs-grid .card").length !== 12) fail("smart mode should render 12 cards");
   console.log("  ✓ 'Smart match' toggle calls get_recommendations and renders cards");
+
+  // ---- 4d. Hidden gems tab + Home button ----
+  const gemsSeg = [...doc.querySelectorAll("#rec-mode .seg")].find((b) => b.dataset.mode === "gems");
+  if (!gemsSeg) fail("'Hidden gems' tab missing");
+  gemsSeg.dispatchEvent(new window.Event("click"));
+  await sleep(40);
+  if (!calls.join("\n").includes("/rpc/get_hidden_gems")) fail("hidden gems endpoint never called");
+  if (doc.querySelectorAll("#recs-grid .card").length !== 12) fail("gems mode should render 12 cards");
+  if (!doc.querySelector("#view-recs [data-nav=home]")) fail("Home button missing on recs screen");
+  console.log("  ✓ 'Hidden gems' tab calls get_hidden_gems; Home button present");
 
   // ---- 4c. photo-search results screen ----
   if (!doc.querySelector("#photo-btn")) fail("'Search by photo' button missing");

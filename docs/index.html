@@ -53,6 +53,7 @@
     <section id="view-detail" class="view">
       <header class="topbar">
         <button class="btn-back" data-nav="back" aria-label="Back">‹ Back</button>
+        <button class="btn-ghost" data-nav="home" aria-label="Home">🏠 Home</button>
       </header>
       <div id="detail-body" class="detail-body"></div>
     </section>
@@ -61,13 +62,15 @@
     <section id="view-recs" class="view">
       <header class="topbar">
         <button class="btn-back" data-nav="back" aria-label="Back">‹ Back</button>
+        <button class="btn-ghost" data-nav="home" aria-label="Home">🏠 Home</button>
         <button id="share-btn" class="btn-ghost" aria-label="Share">Share</button>
       </header>
       <div id="rec-source" class="rec-source" hidden></div>
       <h2 id="recs-heading" class="recs-heading" hidden></h2>
       <div class="segmented" id="rec-mode">
-        <button type="button" class="seg active" data-mode="smart">🏷️ Smart match</button>
+        <button type="button" class="seg active" data-mode="smart">🏷️ Smart</button>
         <button type="button" class="seg" data-mode="visual">🧠 Looks alike</button>
+        <button type="button" class="seg" data-mode="gems">💎 Hidden gems</button>
       </div>
       <p class="recs-sub">Press &amp; hold a game to peek at in-game screenshots · tap to open</p>
       <div id="recs-note" class="recs-note" hidden></div>

@@ -55,6 +55,7 @@
   function searchGames(q, lim) { return rpc("search_games", { q: q, lim: lim || 8 }); }
   function recommend(id) { return rpc("get_recommendations", { source_id: id, lim: REC_COUNT }); }
   function recommendVisual(id) { return rpc("get_visual_recommendations", { source_id: id, lim: REC_COUNT }); }
+  function recommendGems(id) { return rpc("get_hidden_gems", { source_id: id, lim: REC_COUNT }); }
   function userMedia(id) {
     var cols = "source,image_url,thumb_url,author,source_url,caption";
     var u = URL_BASE + "/rest/v1/user_media?game_id=eq." + encodeURIComponent(id) +
@@ -104,6 +105,7 @@
     if (v === "home") resetHome();
     show(v);
   }
+  function goHome() { stack = ["home"]; resetHome(); show("home"); }
 
   // ---------- cover element ----------
   function coverEl(game, size, ratioW, ratioH) {
@@ -386,6 +388,7 @@
   // ---------- why-recommended explanation ----------
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
   function whyPanel(rec, src, mode) {
+    if (mode === "gems") return whyPanelGems(rec, src);
     if (mode === "visual") return whyPanelVisual(rec, src);
     var panel = el("div", "why");
     panel.appendChild(el("h3", "why-h", "✨ Why we picked this for you"));
@@ -445,6 +448,25 @@
     return panel;
   }
 
+  function whyPanelGems(rec, src) {
+    var panel = el("div", "why why-gems");
+    panel.appendChild(el("h3", "why-h", "💎 Why this hidden gem"));
+    var reasons = [];
+    var rc = (typeof rec.total_rating_count === "number") ? rec.total_rating_count : null;
+    reasons.push("An <b>under-the-radar</b> title" + (rc != null ? " (only <b>" + rc + " reviews</b>)" : "") +
+      " whose gameplay looks &amp; feels like <b>" + esc(src && src.name ? src.name : "your pick") + "</b>.");
+    var genres = intersect(rec.genres, src ? src.genres : []);
+    if (genres.length) reasons.push("Shared genres: <b>" + esc(listText(genres, 3)) + "</b>.");
+    var ul = el("ul", "why-list");
+    reasons.forEach(function (t) { var li = document.createElement("li"); li.innerHTML = t; ul.appendChild(li); });
+    panel.appendChild(ul);
+    var note = el("p", "why-note");
+    note.innerHTML = "Hidden gems = nearest matches in the <b>CLIP</b> gameplay-vision space, restricted to " +
+      "low-popularity games — discovery without bestseller bias.";
+    panel.appendChild(note);
+    return panel;
+  }
+
   // ============================================================ RECOMMENDATIONS
   var currentRecs = [];
   var currentMode = "visual";
@@ -488,36 +510,48 @@
     grid.innerHTML = "";
     note.hidden = true;
     showSpinner(true);
-    var p = mode === "visual" ? recommendVisual(sourceGame.id) : recommend(sourceGame.id);
+    var p = mode === "visual" ? recommendVisual(sourceGame.id)
+          : mode === "gems" ? recommendGems(sourceGame.id)
+          : recommend(sourceGame.id);
     p.then(function (recs) {
       showSpinner(false);
       currentRecs = recs || [];
       if (!currentRecs.length) {
         if (mode === "visual") { setActiveSeg("smart"); loadMode("smart"); return; }
         note.hidden = false;
-        note.innerHTML = "Couldn't generate recommendations.";
+        note.innerHTML = mode === "gems"
+          ? "💎 No under-the-radar look-alikes for this one — try <b>Looks alike</b>."
+          : "Couldn't generate recommendations.";
         return;
       }
-      renderRecs(currentRecs);
+      renderRecs(currentRecs, mode);
     }).catch(function (err) { showSpinner(false); toast("Network error."); console.error(err); });
   }
 
-  function renderRecs(recs) {
+  function ratingClass(r) { return r == null ? "lo" : r >= 80 ? "hi" : r >= 65 ? "mid" : "lo"; }
+
+  function renderRecs(recs, mode) {
     var grid = $("#recs-grid");
     grid.innerHTML = "";
     recs.forEach(function (g) {
       var card = el("div", "card");
       var cover = coverEl(g, "cover_big", 160, 226);
-      var mi = matchInfo(g, sourceGame);
-      g._match = mi;
-      var badge = el("div", "match-badge " + (mi.pct >= 75 ? "hi" : mi.pct >= 50 ? "mid" : "lo"), mi.pct + "% match");
-      cover.appendChild(badge);
+      if (mode === "gems") {
+        // discovery mode: show quality (rating) rather than a source-match %
+        var rr = rating(g.total_rating);
+        cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "💎 rare"));
+      } else {
+        var mi = matchInfo(g, sourceGame);
+        g._match = mi;
+        cover.appendChild(el("div", "match-badge " + (mi.pct >= 75 ? "hi" : mi.pct >= 50 ? "mid" : "lo"), mi.pct + "% match"));
+      }
       card.appendChild(cover);
       card.appendChild(el("div", "card-name", g.name));
       var sub = [];
       if (g.release_year) sub.push(String(g.release_year));
       var r = rating(g.total_rating); if (r) sub.push("★ " + r);
-      if (arr(g.genres).length) sub.push(arr(g.genres)[0]);
+      if (mode === "gems" && typeof g.total_rating_count === "number") sub.push(g.total_rating_count + " reviews");
+      else if (arr(g.genres).length) sub.push(arr(g.genres)[0]);
       card.appendChild(el("div", "card-sub", sub.join("  ·  ")));
       attachCardInteraction(card, g);
       grid.appendChild(card);
@@ -696,13 +730,17 @@
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
     $("#recs-note").hidden = true;
     var grid = $("#recs-grid"); grid.innerHTML = "";
+    // highest-rated visual matches first, and show the rating
+    games = games.slice().sort(function (a, b) { return (parseFloat(b.total_rating) || 0) - (parseFloat(a.total_rating) || 0); });
     games.forEach(function (g) {
       var card = el("div", "card");
-      card.appendChild(coverEl(g, "cover_big", 160, 226));
+      var cover = coverEl(g, "cover_big", 160, 226);
+      var rr = rating(g.total_rating);
+      cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "—"));
+      card.appendChild(cover);
       card.appendChild(el("div", "card-name", g.name));
       var meta = [];
       if (g.release_year) meta.push(String(g.release_year));
-      var rr = rating(g.total_rating); if (rr) meta.push("★ " + rr);
       if (arr(g.genres).length) meta.push(arr(g.genres)[0]);
       card.appendChild(el("div", "card-sub", meta.join("  ·  ")));
       attachCardInteraction(card, g);
@@ -716,7 +754,9 @@
     if (!URL_BASE || !KEY) { alert("Missing backend config (config.js)."); return; }
     initHome();
     initLightbox();
-    document.querySelectorAll("[data-nav=back]").forEach(function (b) { b.addEventListener("click", back); });
+    document.querySelectorAll("[data-nav]").forEach(function (b) {
+      b.addEventListener("click", b.getAttribute("data-nav") === "home" ? goHome : back);
+    });
     document.querySelectorAll("#rec-mode .seg").forEach(function (b) {
       b.addEventListener("click", function () {
         var mode = b.getAttribute("data-mode");
