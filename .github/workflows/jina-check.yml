@@ -1,0 +1,16 @@
+name: Jina check
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Call diagnostic function
+        run: |
+          URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' docs/config.js)
+          echo "Calling $URL/functions/v1/jina-check"
+          curl -s "$URL/functions/v1/jina-check" | tee /tmp/out.json
+          echo
+          echo "=== parsed ==="
+          python3 -c "import json;d=json.load(open('/tmp/out.json'));print('JINA_STATUS=',d.get('jina_status'));print('KEY_TAIL=',d.get('key_tail'));print('BODY=',d.get('body'))"
