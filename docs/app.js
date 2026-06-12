@@ -289,7 +289,7 @@
     // Player captures (Steam Community + Reddit) — links only, loaded async.
     var pcSec = el("div", "section");
     pcSec.hidden = true;
-    pcSec.appendChild(el("h3", "section-h", "📸 Player captures · Steam Community"));
+    pcSec.appendChild(el("h3", "section-h", "Player captures · Steam Community"));
     var pcStrip = el("div", "gallery");
     pcSec.appendChild(pcStrip);
     body.appendChild(pcSec);
@@ -375,11 +375,11 @@
     wrap.appendChild(head);
     var rows = el("div", "score-rows");
     if (mi.visPct != null)
-      rows.appendChild(scoreRow("🖼️ Gameplay look-alike", mi.visPct, "main factor — how similar the in-game screenshots are"));
-    rows.appendChild(scoreRow("🎮 Shared genres", mi.genrePct,
+      rows.appendChild(scoreRow("Gameplay look-alike", mi.visPct, "main factor — how similar the in-game screenshots are"));
+    rows.appendChild(scoreRow("Shared genres", mi.genrePct,
       mi.sharedGenres.length ? mi.sharedGenres.slice(0, 3).join(", ") : "none in common"));
     if (mi.yearDiff != null)
-      rows.appendChild(scoreRow("📅 Release era", mi.yearPct,
+      rows.appendChild(scoreRow("Release era", mi.yearPct,
         rec.release_year + " · " + mi.yearDiff + " year" + (mi.yearDiff === 1 ? "" : "s") + " apart"));
     wrap.appendChild(rows);
     return wrap;
@@ -391,7 +391,7 @@
     if (mode === "gems") return whyPanelGems(rec, src);
     if (mode === "visual") return whyPanelVisual(rec, src);
     var panel = el("div", "why");
-    panel.appendChild(el("h3", "why-h", "✨ Why we picked this for you"));
+    panel.appendChild(el("h3", "why-h", "Why we picked this for you"));
     panel.appendChild(scoreBlock(rec, src));
 
     var reasons = [];
@@ -424,7 +424,7 @@
 
   function whyPanelVisual(rec, src) {
     var panel = el("div", "why why-visual");
-    panel.appendChild(el("h3", "why-h", "🧠 Why it looks like this"));
+    panel.appendChild(el("h3", "why-h", "Why it looks like this"));
     panel.appendChild(scoreBlock(rec, src));
 
     var reasons = [];
@@ -450,7 +450,7 @@
 
   function whyPanelGems(rec, src) {
     var panel = el("div", "why why-gems");
-    panel.appendChild(el("h3", "why-h", "💎 Why this hidden gem"));
+    panel.appendChild(el("h3", "why-h", "Why this hidden gem"));
     var reasons = [];
     var rc = (typeof rec.total_rating_count === "number") ? rec.total_rating_count : null;
     reasons.push("An <b>under-the-radar</b> title" + (rc != null ? " (only <b>" + rc + " reviews</b>)" : "") +
@@ -520,7 +520,7 @@
         if (mode === "visual") { setActiveSeg("smart"); loadMode("smart"); return; }
         note.hidden = false;
         note.innerHTML = mode === "gems"
-          ? "💎 No under-the-radar look-alikes for this one — try <b>Looks alike</b>."
+          ? "No under-the-radar look-alikes for this one — try <b>Looks alike</b>."
           : "Couldn't generate recommendations.";
         return;
       }
@@ -539,7 +539,7 @@
       if (mode === "gems") {
         // discovery mode: show quality (rating) rather than a source-match %
         var rr = rating(g.total_rating);
-        cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "💎 rare"));
+        cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "rare"));
       } else {
         var mi = matchInfo(g, sourceGame);
         g._match = mi;
@@ -725,7 +725,7 @@
   function openPhotoResults(games) {
     sourceGame = null;
     currentVisScores = {};
-    renderSourceBar(null, "📷 Games that look like<br><b>your photo</b>");
+    renderSourceBar(null, "Games that look like<br><b>your photo</b>");
     var seg = $("#rec-mode"); if (seg) seg.hidden = true;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
     $("#recs-note").hidden = true;
