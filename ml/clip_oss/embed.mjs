@@ -79,7 +79,9 @@ async function insertBatch(rows) {
 async function main() {
   log(`Loading ${MODEL} ...`);
   const processor = await AutoProcessor.from_pretrained(MODEL);
-  const model = await CLIPVisionModelWithProjection.from_pretrained(MODEL, { dtype: "fp32" });
+  // q8: the browser loads this exact quantized model (~45 MB), so catalog and
+  // query vectors stay in the same space. Keep CI and browser dtype identical.
+  const model = await CLIPVisionModelWithProjection.from_pretrained(MODEL, { dtype: "q8" });
 
   const embed = async (id) => {
     const image = await RawImage.read(IMG(id)); // fetch + decode
