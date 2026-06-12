@@ -161,7 +161,7 @@
     // search by photo
     var pbtn = $("#photo-btn"), pin = $("#photo-input");
     if (pbtn && pin) {
-      pbtn.addEventListener("click", function () { pin.value = ""; pin.click(); });
+      pbtn.addEventListener("click", function () { warmPhotoSearch(); pin.value = ""; pin.click(); });
       pin.addEventListener("change", function () { handlePhoto(pin.files && pin.files[0]); });
     }
   }
@@ -646,28 +646,45 @@
     });
   }
 
+  function photoSearchUrl() { return URL_BASE + "/functions/v1/photo-search"; }
+  function warmPhotoSearch() {
+    try {
+      fetch(photoSearchUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
+        body: JSON.stringify({ warmup: true }),
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  function postPhoto(dataUrl) {
+    return fetch(photoSearchUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
+      body: JSON.stringify({ image: dataUrl, lim: REC_COUNT }),
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) throw new Error(d && d.error ? d.error : "search failed");
+        return d.games || [];
+      });
+    });
+  }
+
   function handlePhoto(file) {
     if (!file) return;
     showSpinner(true);
-    downscaleDataUrl(file, 512).then(function (dataUrl) {
-      return fetch(URL_BASE + "/functions/v1/photo-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
-        body: JSON.stringify({ image: dataUrl, lim: REC_COUNT }),
-      }).then(function (r) {
-        return r.json().then(function (d) {
-          if (!r.ok) throw new Error(d && d.error ? d.error : "search failed");
-          return d.games || [];
-        });
+    downscaleDataUrl(file, 384).then(function (dataUrl) {
+      return postPhoto(dataUrl).catch(function () {
+        // one automatic retry — covers the first cold-start miss
+        return new Promise(function (res) { setTimeout(res, 800); }).then(function () { return postPhoto(dataUrl); });
       });
     }).then(function (games) {
       showSpinner(false);
-      if (!games.length) { toast("No visual matches found."); return; }
+      if (!games.length) { toast("No close visual matches found."); return; }
       openPhotoResults(games);
     }).catch(function (err) {
       showSpinner(false);
       console.error(err);
-      toast("Photo search isn't ready yet (server key not set).");
+      toast("Photo search hiccuped — please try once more.");
     });
   }
 
