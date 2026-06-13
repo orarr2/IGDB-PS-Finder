@@ -163,7 +163,7 @@
     // search by photo
     var pbtn = $("#photo-btn"), pin = $("#photo-input");
     if (pbtn && pin) {
-      pbtn.addEventListener("click", function () { warmPhotoSearch(); pin.value = ""; pin.click(); });
+      pbtn.addEventListener("click", function () { loadEmbedder().catch(function () {}); pin.value = ""; pin.click(); });
       pin.addEventListener("change", function () { handlePhoto(pin.files && pin.files[0]); });
     }
   }
@@ -655,86 +655,61 @@
   }
 
   // ============================================================ PHOTO SEARCH
-  // The photo is embedded server-side (Supabase Edge Function → Jina CLIP) and
-  // matched against each game's screenshot embeddings (pgvector). Nothing is
-  // downloaded to the phone; the model "understands" scenes (pitch, track, etc.).
-  function fileToImage(file) {
-    return new Promise(function (resolve, reject) {
-      var url = URL.createObjectURL(file);
-      var img = new Image();
-      img.onload = function () { resolve({ img: img, url: url }); };
-      img.onerror = function () { reject(new Error("Couldn't read that image.")); };
-      img.src = url;
+  // Fully on-device and free: the photo is embedded in the browser with the
+  // open-source CLIP model (transformers.js, Xenova/clip-vit-base-patch32, q8)
+  // — the SAME model that embedded every game's screenshots into game_clip_oss.
+  // The resulting 512-d vector is matched by match_games_by_clip_oss (pgvector).
+  // The model (~45 MB) downloads once and is then cached by the browser; the
+  // photo itself never leaves the device. No server embedding, no API key.
+  var CLIP_MODEL = "Xenova/clip-vit-base-patch32";
+  var CLIP_LIB = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5";
+  var _embedder = null, _embedderPromise = null;
+
+  function loadEmbedder() {
+    if (_embedder) return Promise.resolve(_embedder);
+    if (_embedderPromise) return _embedderPromise;
+    _embedderPromise = import(CLIP_LIB).then(function (T) {
+      T.env.allowLocalModels = false;
+      return Promise.all([
+        T.AutoProcessor.from_pretrained(CLIP_MODEL),
+        T.CLIPVisionModelWithProjection.from_pretrained(CLIP_MODEL, { dtype: "q8" }),
+      ]).then(function (p) { _embedder = { T: T, processor: p[0], model: p[1] }; return _embedder; });
     });
+    _embedderPromise.catch(function () { _embedderPromise = null; }); // allow a retry after failure
+    return _embedderPromise;
   }
 
-  // downscale to a small JPEG data-URL so the upload is tiny and fast
-  function downscaleDataUrl(file, max) {
-    return fileToImage(file).then(function (r) {
-      var img = r.img, w = img.naturalWidth, h = img.naturalHeight;
-      var scale = Math.min(1, max / Math.max(w, h));
-      var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
-      var c = document.createElement("canvas"); c.width = cw; c.height = ch;
-      c.getContext("2d").drawImage(img, 0, 0, cw, ch);
-      try { return c.toDataURL("image/jpeg", 0.85); } catch (e) { return r.url; }
-    });
-  }
-
-  // a centred crop (frac of each side), downscaled — focuses on the screen and
-  // gives the server several views to average (crop + TTA)
-  function cropDataUrl(img, frac, max) {
-    var w = img.naturalWidth, h = img.naturalHeight;
-    var cw = Math.max(1, Math.round(w * frac)), ch = Math.max(1, Math.round(h * frac));
-    var sx = Math.round((w - cw) / 2), sy = Math.round((h - ch) / 2);
-    var scale = Math.min(1, max / Math.max(cw, ch));
-    var dw = Math.max(1, Math.round(cw * scale)), dh = Math.max(1, Math.round(ch * scale));
-    var c = document.createElement("canvas"); c.width = dw; c.height = dh;
-    c.getContext("2d").drawImage(img, sx, sy, cw, ch, 0, 0, dw, dh);
-    try { return c.toDataURL("image/jpeg", 0.85); } catch (e) { return null; }
-  }
-
-  function photoSearchUrl() { return URL_BASE + "/functions/v1/photo-search"; }
-  function warmPhotoSearch() {
-    try {
-      fetch(photoSearchUrl(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
-        body: JSON.stringify({ warmup: true }),
-      }).catch(function () {});
-    } catch (e) {}
-  }
-  function postPhoto(images) {
-    return fetch(photoSearchUrl(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
-      body: JSON.stringify({ images: images, lim: REC_COUNT }),
-    }).then(function (r) {
-      return r.json().then(function (d) {
-        if (!r.ok) throw new Error(d && d.error ? d.error : "search failed");
-        return d.games || [];
+  // embed a Blob/File into a unit-length 512-d vector (cosine-ready)
+  function embedPhoto(emb, blob) {
+    return emb.T.RawImage.fromBlob(blob)
+      .then(function (image) { return emb.processor(image); })
+      .then(function (inputs) { return emb.model(inputs); })
+      .then(function (out) {
+        var v = out.image_embeds.tolist()[0], s = 0, i;
+        for (i = 0; i < v.length; i++) s += v[i] * v[i];
+        s = Math.sqrt(s) || 1;
+        for (i = 0; i < v.length; i++) v[i] = v[i] / s;
+        return v;
       });
-    });
   }
 
   function handlePhoto(file) {
     if (!file) return;
+    if (!_embedder) toast("Preparing visual search… (first time downloads a small model)");
     showSpinner(true);
-    fileToImage(file).then(function (r) {
-      // full view + two centred crops → server averages them
-      var images = [cropDataUrl(r.img, 1.0, 384), cropDataUrl(r.img, 0.72, 384), cropDataUrl(r.img, 0.5, 384)]
-        .filter(Boolean);
-      return postPhoto(images).catch(function () {
-        return new Promise(function (res) { setTimeout(res, 800); }).then(function () { return postPhoto(images); });
+    loadEmbedder()
+      .then(function (emb) { return embedPhoto(emb, file); })
+      .then(function (v) { return rpc("match_games_by_clip_oss", { query: JSON.stringify(v), lim: REC_COUNT }); })
+      .then(function (games) {
+        showSpinner(false);
+        if (!games || !games.length) { toast("No close visual matches found."); return; }
+        openPhotoResults(games);
+      })
+      .catch(function (err) {
+        showSpinner(false);
+        console.error(err);
+        toast("Photo search hiccuped — please try once more.");
       });
-    }).then(function (games) {
-      showSpinner(false);
-      if (!games.length) { toast("No close visual matches found."); return; }
-      openPhotoResults(games);
-    }).catch(function (err) {
-      showSpinner(false);
-      console.error(err);
-      toast("Photo search hiccuped — please try once more.");
-    });
   }
 
   function openPhotoResults(games) {
