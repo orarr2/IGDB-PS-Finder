@@ -6,8 +6,8 @@
  *   - Everything else (Supabase API, IGDB cover images): network-first with a
  *     runtime cache fallback, so previously seen covers survive offline.
  */
-var SHELL = "ps-recommender-shell-v13";
-var RUNTIME = "ps-recommender-runtime-v13";
+var SHELL = "ps-recommender-shell-v14";
+var RUNTIME = "ps-recommender-runtime-v14";
 
 var SHELL_ASSETS = [
   "./",
@@ -46,15 +46,17 @@ self.addEventListener("fetch", function (e) {
   var isShell = url.origin === self.location.origin &&
     SHELL_ASSETS.indexOf("." + url.pathname.replace(self.registration.scope.replace(self.location.origin, ""), "/")) !== -1;
 
-  // Same-origin shell → cache-first.
+  // Same-origin shell → network-first (fall back to cache offline). This keeps
+  // the app from getting stuck on a stale cached build: when online, users
+  // always get the latest HTML/JS/CSS; when offline, the cached shell loads.
   if (url.origin === self.location.origin) {
     e.respondWith(
-      caches.match(req).then(function (hit) {
-        return hit || fetch(req).then(function (res) {
-          var copy = res.clone();
-          caches.open(SHELL).then(function (c) { c.put(req, copy); });
-          return res;
-        }).catch(function () { return caches.match("./index.html"); });
+      fetch(req).then(function (res) {
+        var copy = res.clone();
+        caches.open(SHELL).then(function (c) { c.put(req, copy); });
+        return res;
+      }).catch(function () {
+        return caches.match(req).then(function (hit) { return hit || caches.match("./index.html"); });
       })
     );
     return;

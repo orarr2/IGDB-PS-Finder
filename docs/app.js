@@ -670,6 +670,10 @@
     if (_embedderPromise) return _embedderPromise;
     _embedderPromise = import(CLIP_LIB).then(function (T) {
       T.env.allowLocalModels = false;
+      // GitHub Pages isn't cross-origin-isolated, so multi-threaded WASM and
+      // SharedArrayBuffer aren't available — pin to single-threaded WASM so
+      // onnxruntime-web runs reliably on iOS Safari.
+      try { T.env.backends.onnx.wasm.numThreads = 1; } catch (e) {}
       return Promise.all([
         T.AutoProcessor.from_pretrained(CLIP_MODEL),
         T.CLIPVisionModelWithProjection.from_pretrained(CLIP_MODEL, { dtype: "q8" }),
@@ -677,6 +681,27 @@
     });
     _embedderPromise.catch(function () { _embedderPromise = null; }); // allow a retry after failure
     return _embedderPromise;
+  }
+
+  // downscale to a small JPEG Blob first — keeps decoding light on phones and
+  // the model resizes to 224 anyway
+  function downscaleToBlob(file, max) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var im = new Image();
+      im.onload = function () {
+        var w = im.naturalWidth, h = im.naturalHeight, scale = Math.min(1, max / Math.max(w, h));
+        var c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(w * scale));
+        c.height = Math.max(1, Math.round(h * scale));
+        c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        if (c.toBlob) c.toBlob(function (b) { resolve(b || file); }, "image/jpeg", 0.9);
+        else resolve(file);
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); reject(new Error("Couldn't read that image.")); };
+      im.src = url;
+    });
   }
 
   // embed a Blob/File into a unit-length 512-d vector (cosine-ready)
@@ -695,10 +720,12 @@
 
   function handlePhoto(file) {
     if (!file) return;
-    if (!_embedder) toast("Preparing visual search… (first time downloads a small model)");
+    if (!_embedder) toast("Preparing visual search… first run downloads a small model (~45 MB)");
     showSpinner(true);
     loadEmbedder()
-      .then(function (emb) { return embedPhoto(emb, file); })
+      .then(function (emb) {
+        return downscaleToBlob(file, 512).then(function (blob) { return embedPhoto(emb, blob); });
+      })
       .then(function (v) { return rpc("match_games_by_clip_oss", { query: JSON.stringify(v), lim: REC_COUNT }); })
       .then(function (games) {
         showSpinner(false);
@@ -707,8 +734,8 @@
       })
       .catch(function (err) {
         showSpinner(false);
-        console.error(err);
-        toast("Photo search hiccuped — please try once more.");
+        console.error("photo search:", err);
+        toast("Photo search error: " + (err && err.message ? err.message : String(err)));
       });
   }
 
