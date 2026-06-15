@@ -118,12 +118,15 @@ def collect_games(igdb_query, batch_size: int = 500, save_every: int = 10) -> li
 
     batch_num = 0
     while True:
+        # Released titles need a few ratings (quality filter), but also pull
+        # UPCOMING games (future release date) so the app's "Upcoming" view works.
+        now_ts = int(time.time())
         query = f"""
         fields {FIELDS};
         where platforms = ({PLATFORMS_STR})
-            & total_rating_count > 3
             & cover != null
-            & game_type = 0;
+            & game_type = 0
+            & (total_rating_count > 3 | first_release_date > {now_ts});
         limit {batch_size};
         offset {offset};
         sort first_release_date asc;

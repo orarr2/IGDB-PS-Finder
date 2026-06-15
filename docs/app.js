@@ -972,6 +972,51 @@
     host.hidden = false;
   }
 
+  // ============================================================ UPCOMING (□ on home)
+  function upcomingGames() {
+    var nowIso = new Date().toISOString();
+    var u = URL_BASE + "/rest/v1/games?release_date=gt." + encodeURIComponent(nowIso) +
+      "&select=" + encodeURIComponent(GAME_COLS + ",release_date") +
+      "&order=release_date.asc&limit=30";
+    return fetch(u, { headers: headers() }).then(checkJson).catch(function () { return []; });
+  }
+  function fmtDate(d) {
+    if (!d) return "TBA";
+    var dt = new Date(d);
+    return isNaN(dt) ? "TBA" : dt.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+  function openUpcoming() {
+    sourceGame = null; currentVisScores = {}; currentSeries = []; photoMatches = null;
+    renderSourceBar(null, "<b>Upcoming on PlayStation</b><br>sorted by release date");
+    var seg = $("#rec-mode"); if (seg) seg.hidden = true;
+    var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
+    var note = $("#recs-note"); note.hidden = true;
+    var grid = $("#recs-grid"); grid.innerHTML = "";
+    push("recs");
+    showSpinner(true);
+    upcomingGames().then(function (games) {
+      showSpinner(false);
+      if (!games || !games.length) {
+        note.hidden = false;
+        note.innerHTML = "No upcoming releases in the catalogue right now - check back soon.";
+        return;
+      }
+      games.forEach(function (g) {
+        var card = el("div", "card");
+        var cover = coverEl(g, "cover_big", 160, 226);
+        cover.appendChild(el("div", "match-badge soon", fmtDate(g.release_date)));
+        card.appendChild(cover);
+        card.appendChild(el("div", "card-name", g.name));
+        var meta = [];
+        if (arr(g.genres).length) meta.push(arr(g.genres)[0]);
+        else if (arr(g.developers).length) meta.push(arr(g.developers)[0]);
+        card.appendChild(el("div", "card-sub", meta.join("  ·  ")));
+        card.addEventListener("click", function () { openPick(g.id); });
+        grid.appendChild(card);
+      });
+    });
+  }
+
   // ============================================================ MY LIST (□)
   function openSavedList() {
     var saved = getSaved();
@@ -1023,6 +1068,7 @@
     });
     var s = $("#share-btn"); if (s) s.addEventListener("click", doShare);
     var ml = $("#mylist-btn"); if (ml) ml.addEventListener("click", openSavedList);
+    var up = $("#upcoming-btn"); if (up) up.addEventListener("click", openUpcoming);
     buildHomeDemo();
 
     // the press-and-hold preview must never get stuck on screen

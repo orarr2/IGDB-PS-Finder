@@ -103,7 +103,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------- home ---------- */
 .home-top {
-  display: flex; align-items: center; justify-content: flex-end;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: calc(var(--safe-top) + 14px) 18px 2px;
 }
 .home-top .pbtn { padding: 9px 14px; font-size: 13px; }
@@ -357,6 +357,7 @@ img { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: none; }
 .match-badge.mid { background: #ffd23f; color: #2a2200; }
 .match-badge.lo { background: #ff8a5c; color: #2a0f00; }
 .match-badge.series { background: #3a82ff; color: #fff; }
+.match-badge.soon { background: #7c4dff; color: #fff; }
 
 /* full-width section label inside the recommendations grid */
 .grid-label {
