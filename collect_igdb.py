@@ -1,6 +1,6 @@
 """Collect PS4/PS5 game metadata from IGDB into games.parquet.
 
-Mirrors igdb_data_collection.ipynb Cells 4–9 but reads credentials from env vars
+Mirrors igdb_data_collection.ipynb Cells 4-9 but reads credentials from env vars
 and skips image downloads (not needed for the Supabase load).
 
 Required environment variables:
@@ -34,7 +34,7 @@ DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # IGDB platform ids. Default to the full PlayStation family so a game's whole
-# series is captured (e.g. Uncharted 1–3 on PS3, not just Uncharted 4 on PS4).
+# series is captured (e.g. Uncharted 1-3 on PS3, not just Uncharted 4 on PS4).
 # Override with IGDB_PLATFORMS="48,167" to go back to PS4/PS5 only.
 #   7=PS1  8=PS2  9=PS3  38=PSP  46=PS Vita  48=PS4  167=PS5
 _DEFAULT_PLATFORMS = "7,8,9,38,46,48,167"

@@ -95,7 +95,7 @@ def main() -> int:
         print("ERROR: set SUPABASE_URL and SUPABASE_SERVICE_KEY", file=sys.stderr)
         return 2
     if not PARQUET_PATH.exists():
-        print(f"ERROR: {PARQUET_PATH} not found — run the notebook first", file=sys.stderr)
+        print(f"ERROR: {PARQUET_PATH} not found - run the notebook first", file=sys.stderr)
         return 2
 
     print(f"Reading {PARQUET_PATH} ...")

@@ -2,14 +2,14 @@
 Function's embed-proxy (so the embedding key stays only in the function).
 
 Design goals (learned the hard way):
-  * Resumable — already-embedded (game_id, shot) pairs are loaded from the
+  * Resumable - already-embedded (game_id, shot) pairs are loaded from the
     existing shards and skipped, so a re-run never re-pays for finished work.
-  * Checkpointed — every CHECKPOINT successful batches the shards are rewritten
+  * Checkpointed - every CHECKPOINT successful batches the shards are rewritten
     and committed+pushed, so a job timeout loses at most a few minutes of work
     instead of the whole run. Repeated dispatches converge to 100%.
-  * Gentle — low embed concurrency with exponential back-off, because hammering
+  * Gentle - low embed concurrency with exponential back-off, because hammering
     the proxy with many parallel batches gets almost everything rate-limited.
-  * Honest — prints a clear success ratio so a half-finished run is obvious.
+  * Honest - prints a clear success ratio so a half-finished run is obvious.
 
 Output: ml/clip_v2/clip_NN.json  {"items":[{"game_id","shot","v":[1024]}]}
 Env: SUPABASE_URL, SUPABASE_KEY (anon), SHOTS (default 4), LIMIT (0=all)
@@ -156,7 +156,7 @@ def main() -> int:
                 jobs.append((g["id"], idx, sid))
     log(f"{len(jobs)} screenshots still to embed")
     if not jobs:
-        log("Nothing to do — already complete.")
+        log("Nothing to do - already complete.")
         return 0
 
     log("Downloading…")
@@ -187,7 +187,7 @@ def main() -> int:
     log(f"Batch success: {ok_b}/{len(batches)}  ({100*ok_b/max(1,len(batches)):.0f}%)")
     log(f"Total v2 embeddings on disk: {n}  ({time.time()-t0:.0f}s)")
     if ok_b < 0.9 * len(batches):
-        log("WARNING: many batches failed — re-dispatch to continue (resumable).")
+        log("WARNING: many batches failed - re-dispatch to continue (resumable).")
     return 0
 
 

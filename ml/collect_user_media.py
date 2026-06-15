@@ -3,7 +3,7 @@
 For each game we resolve a Steam appid (storefront search), pull the top
 community screenshots via Steam's screenshot AJAX endpoint, and read each
 screenshot's full-resolution image URL from its details page. We store only the
-image URL + source link (attribution) — never the file itself.
+image URL + source link (attribution) - never the file itself.
 
 Output -> ml/user_media.json, later loaded into public.user_media.
 
@@ -70,7 +70,7 @@ def load_games():
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     key = os.environ.get("SUPABASE_KEY", "")
     if not url or not key:
-        log("No GAMES_FILE and no Supabase creds — nothing to do.")
+        log("No GAMES_FILE and no Supabase creds - nothing to do.")
         return []
     n = int(os.environ.get("PILOT_N", "30"))
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
@@ -104,7 +104,7 @@ def steam_appid(name: str):
 
 
 def steam_screenshots(appid: int, n: int):
-    """Top community screenshots via one homecontent request — image URLs and
+    """Top community screenshots via one homecontent request - image URLs and
     their source links are parsed straight from the listing (no per-screenshot
     page visits, so far fewer requests = far less throttling)."""
     url = (f"https://steamcommunity.com/app/{appid}/homecontent/"

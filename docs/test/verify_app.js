@@ -208,6 +208,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   });
   console.log("  ✓ called the real Supabase endpoints");
 
-  console.log("\nALL CHECKS PASSED — autocomplete, gallery, 12 recs, why-panel & lightbox all work.");
+  console.log("\nALL CHECKS PASSED - autocomplete, gallery, 12 recs, why-panel & lightbox all work.");
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -1,13 +1,13 @@
 /*
- * Service worker — makes the app installable and lets the shell load offline.
+ * Service worker - makes the app installable and lets the shell load offline.
  * Strategy:
  *   - App shell (HTML/CSS/JS/icons): cache-first, so the app opens instantly
  *     and works with no connection (data calls still need the network).
  *   - Everything else (Supabase API, IGDB cover images): network-first with a
  *     runtime cache fallback, so previously seen covers survive offline.
  */
-var SHELL = "ps-recommender-shell-v16";
-var RUNTIME = "ps-recommender-runtime-v16";
+var SHELL = "ps-recommender-shell-v17";
+var RUNTIME = "ps-recommender-runtime-v17";
 
 var SHELL_ASSETS = [
   "./",

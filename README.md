@@ -3,13 +3,13 @@
 A desktop game-recommendation app for PS4/PS5, built on data pulled from the
 [IGDB API](https://api-docs.igdb.com/) and served from a Supabase Postgres
 database. Type a game you like, see its details, and get nine recommendations
-you might enjoy — with cover art, ratings, and a one-click share.
+you might enjoy - with cover art, ratings, and a one-click share.
 
 ![flow: Home → Detail → Recommendations](docs/flow.png)
 
 ## 📱 iPhone app
 
-There's now an installable **iPhone app** in [`docs/`](docs/) — a Progressive
+There's now an installable **iPhone app** in [`docs/`](docs/) - a Progressive
 Web App you add to your Home Screen from Safari (no App Store, no Mac, no Xcode).
 It talks to the same live backend, so it returns the same real recommendations.
 It's served via GitHub Pages (Deploy from a branch → `/docs`). See
@@ -19,7 +19,7 @@ It's served via GitHub Pages (Deploy from a branch → `/docs`). See
 
 | File | Purpose |
 |---|---|
-| `app.py` | PyQt6 desktop app — three screens (Home / Detail / Recommendations) |
+| `app.py` | PyQt6 desktop app - three screens (Home / Detail / Recommendations) |
 | `collect_igdb.py` | One-shot script that pulls PS4/PS5 metadata from IGDB into `games.parquet` |
 | `load_to_supabase.py` | Idempotent upsert of `games.parquet` into Supabase `public.games` |
 | `igdb_data_collection.ipynb` | Original notebook that also downloads cover/screenshot images for ML work |
@@ -49,7 +49,7 @@ Top-9 by score wins. Results are produced server-side in one round-trip.
 
 1. Create a Supabase project (any region).
 2. Apply the migrations in `migrations/` (or just paste the SQL from
-   `collect_igdb.py`'s docstring into the SQL editor — schema is one `games`
+   `collect_igdb.py`'s docstring into the SQL editor - schema is one `games`
    table plus two RPC functions, `search_games` and `get_recommendations`).
 3. From **Project Settings → API Keys**, copy:
    - `URL` → `SUPABASE_URL`
@@ -83,7 +83,7 @@ python load_to_supabase.py        # ~10 seconds, upserts 3,840 rows
 python app.py
 ```
 
-Or double-click **`Launch Recommender.bat`** on Windows — it installs deps and
+Or double-click **`Launch Recommender.bat`** on Windows - it installs deps and
 loads `.env` automatically.
 
 ## Building a standalone `.exe`
@@ -107,7 +107,7 @@ pyinstaller --onefile --windowed --name PSGameRecommender `
   the publishable key works in the client) but blocks writes from anyone except
   the service-role.
 - **The recommendation engine is SQL-based**, not the gradient-boosting model
-  the repo name hints at. That model is a planned next step — bring your own
+  the repo name hints at. That model is a planned next step - bring your own
   CNN on the cover images.
 - **IGDB API change:** the old `category = 0` filter (main games) no longer
   works; the field was renamed `game_type`. `collect_igdb.py` already uses the

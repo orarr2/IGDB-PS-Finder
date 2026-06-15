@@ -73,7 +73,7 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 12px; font-weight: 900; line-height: 1;
 }
 .pbtn:active { transform: translateY(1px); filter: brightness(1.08); }
-/* ✕ = primary (Go / Open) — filled blue */
+/* ✕ = primary (Go / Open) - filled blue */
 .pbtn-x {
   border-color: rgba(126,166,255,0.55); color: #fff;
   background: linear-gradient(180deg, #3a82ff, #0b4ad6);

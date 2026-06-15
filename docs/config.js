@@ -8,7 +8,7 @@
  *     READS, so this key cannot modify or delete any data.
  *
  * The data and recommendation logic behind these endpoints are exactly what
- * the IGDB notebook produced (3,840 PS4/PS5 games) — so results are real.
+ * the IGDB notebook produced (3,840 PS4/PS5 games) - so results are real.
  */
 window.APP_CONFIG = {
   SUPABASE_URL: "https://zttqvoqpwtxchxsglard.supabase.co",

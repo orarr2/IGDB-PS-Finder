@@ -2,7 +2,7 @@
  * Sample app config. Copy to `config.js` and fill in your own Supabase values.
  *   cp config.example.js config.js
  *
- * Use the ANON / PUBLISHABLE key here — NOT the service_role key. A browser app
+ * Use the ANON / PUBLISHABLE key here - NOT the service_role key. A browser app
  * must ship this key for the app to talk to Supabase, and it is safe to do so:
  * Row-Level Security limits the anon key to read-only access. Anyone using the
  * app can see it; that is expected for a client-side Supabase app.

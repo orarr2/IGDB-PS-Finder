@@ -5,7 +5,7 @@
  * model Xenova/clip-vit-base-patch32 (512-d) using transformers.js on CPU, and
  * upserts the vectors into public.game_clip_oss. The browser embeds the query
  * photo with the EXACT same model, so query and catalog vectors live in the
- * same space — no Jina, no paid API, runs free on a GitHub Actions runner.
+ * same space - no Jina, no paid API, runs free on a GitHub Actions runner.
  *
  * Resumable: (game_id, shot_idx) pairs already in the table are skipped, so a
  * timed-out run just continues where it left off on the next dispatch.
@@ -126,7 +126,7 @@ async function main() {
         body: JSON.stringify({ query: JSON.stringify(s.v), lim: 5 }),
       });
       const hit = res.some((g) => g.id === s.game_id);
-      log(`  game ${s.game_id}: ${hit ? "OK (self in top-5)" : "MISS — top=" + (res[0] && res[0].id)}`);
+      log(`  game ${s.game_id}: ${hit ? "OK (self in top-5)" : "MISS - top=" + (res[0] && res[0].id)}`);
       if (hit) pass++;
     }
     if (pass !== sample.length) { console.error(`Self-check FAILED (${pass}/${sample.length})`); process.exit(1); }

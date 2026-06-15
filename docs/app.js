@@ -1,5 +1,5 @@
 /*
- * PlayStation Game Recommender — iPhone/Android PWA front-end.
+ * PlayStation Game Recommender - iPhone/Android PWA front-end.
  *
  * Talks directly to the Supabase PostgREST API (same backend + data as the
  * IGDB notebook). No framework, no build step.
@@ -64,7 +64,7 @@
     return "{" + list.map(function (s) { return '"' + String(s).replace(/(["\\])/g, "\\$1") + '"'; }).join(",") + "}";
   }
   function seriesBase(name) {
-    var n = (name || "").split(/[:–—(]|\s-\s/)[0].trim();   // before ":", "–", "(", " - "
+    var n = (name || "").split(/[:(]|\s-\s/)[0].trim();   // split off subtitle after ":", "(", or " - "
     n = n.replace(/\s+\b([IVX]{1,4}|\d{1,2})\b\s*$/i, "").trim();      // drop trailing volume number
     return n;
   }
@@ -96,7 +96,7 @@
         return out;
       });
     }
-    // A source from a recommendation card may lack franchise fields — enrich first.
+    // A source from a recommendation card may lack franchise fields - enrich first.
     if (source.collections === undefined && source.franchises === undefined) {
       return getGame(source.id).then(run).catch(function () { return []; });
     }
@@ -153,7 +153,7 @@
     return b;
   }
 
-  // ---------- "My List" (□ Save) — persisted locally on the device ----------
+  // ---------- "My List" (□ Save) - persisted locally on the device ----------
   var SAVE_KEY = "psf_saved";
   function getSaved() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || []; } catch (e) { return []; } }
   function isSaved(id) { return getSaved().some(function (g) { return g.id === id; }); }
@@ -171,7 +171,7 @@
   }
   function shareGame(game) {
     var t = "Check out " + game.name + (game.release_year ? " (" + game.release_year + ")" : "") +
-      " — via PlayStation Game Recommender";
+      " - via PlayStation Game Recommender";
     if (navigator.share) navigator.share({ title: game.name, text: t }).catch(function () {});
     else if (navigator.clipboard) navigator.clipboard.writeText(t).then(function () { toast("Copied to clipboard!"); });
     else toast("Sharing not supported.");
@@ -304,7 +304,7 @@
   }
 
   // whyAgainst: when set, render the "why recommended" panel relative to it.
-  // mode: "smart" (tag match) or "visual" (look-alike) — changes the explanation.
+  // mode: "smart" (tag match) or "visual" (look-alike) - changes the explanation.
   function openDetail(game, whyAgainst, mode) {
     renderDetail(game, whyAgainst || null, mode || "smart");
     push("detail");
@@ -326,7 +326,7 @@
 
     var r = rating(game.total_rating);
     var rr = el("div", "rating-row");
-    rr.appendChild(el("span", "rating-num", r || "—"));
+    rr.appendChild(el("span", "rating-num", r || "-"));
     rr.appendChild(el("span", "rating-label", "RATING / 100"));
     info.appendChild(rr);
 
@@ -337,7 +337,7 @@
     head.appendChild(info);
     body.appendChild(head);
 
-    // WHY panel — right after the score & genres, before the summary.
+    // WHY panel - right after the score & genres, before the summary.
     if (whyAgainst) body.appendChild(whyPanel(game, whyAgainst, mode));
 
     if (game.summary) {
@@ -368,7 +368,7 @@
       body.appendChild(gsec);
     }
 
-    // Player captures (Steam Community + Reddit) — links only, loaded async.
+    // Player captures (Steam Community + Reddit) - links only, loaded async.
     var pcSec = el("div", "section");
     pcSec.hidden = true;
     pcSec.appendChild(el("h3", "section-h", "Player captures · Steam Community"));
@@ -402,9 +402,9 @@
         cell.className = "shot pc-shot";
         cell.href = m.source_url || m.image_url;
         cell.target = "_blank"; cell.rel = "noopener";
-        cell.title = (m.caption || "") + (m.author ? "  — " + m.author : "");
+        cell.title = (m.caption || "") + (m.author ? "  - " + m.author : "");
         var im = new Image();
-        im.alt = m.caption || (game.name + " — player capture");
+        im.alt = m.caption || (game.name + " - player capture");
         im.loading = "lazy"; im.decoding = "async";
         im.onload = function () { cell.classList.add("loaded"); };
         im.onerror = function () {
@@ -420,7 +420,7 @@
     }).catch(function () {});
   }
 
-  // ---------- match score (per mode — never blended) ----------
+  // ---------- match score (per mode - never blended) ----------
   // Smart  = metadata only: series/IGDB-similar, genres, themes, studio, rating.
   // Visual = gameplay screenshot similarity only (computer vision / cosine).
   // The two are kept strictly separate so the modes don't bleed into each other.
@@ -524,7 +524,7 @@
     var themes = intersect(rec.themes, src.themes);
     var modes = intersect(rec.game_modes, src.game_modes);
 
-    if (isSimilar) reasons.push("IGDB lists it as a game <b>directly similar to " + esc(src.name) + "</b> — the strongest possible signal.");
+    if (isSimilar) reasons.push("IGDB lists it as a game <b>directly similar to " + esc(src.name) + "</b> - the strongest possible signal.");
     if (devs.length) reasons.push("Same studio: both come from <b>" + esc(listText(devs, 2)) + "</b>.");
     if (genres.length) reasons.push("Shared genres you liked: <b>" + esc(listText(genres, 3)) + "</b>.");
     if (themes.length) reasons.push("Overlapping themes: <b>" + esc(listText(themes, 3)) + "</b>.");
@@ -552,7 +552,7 @@
 
     var reasons = [];
     reasons.push("Its <b>in-game screenshots</b> are visually closest to <b>" + esc(src.name) +
-      "</b> — matched on actual gameplay frames (not box art) by an image-recognition model.");
+      "</b> - matched on actual gameplay frames (not box art) by an image-recognition model.");
     var genres = intersect(rec.genres, src.genres);
     var themes = intersect(rec.themes, src.themes);
     if (genres.length) reasons.push("They also share genres: <b>" + esc(listText(genres, 3)) + "</b>.");
@@ -585,7 +585,7 @@
     panel.appendChild(ul);
     var note = el("p", "why-note");
     note.innerHTML = "Hidden gems = nearest matches in the <b>CLIP</b> gameplay-vision space, restricted to " +
-      "low-popularity games — discovery without bestseller bias.";
+      "low-popularity games - discovery without bestseller bias.";
     panel.appendChild(note);
     return panel;
   }
@@ -650,7 +650,7 @@
         if (mode === "visual") { setActiveSeg("smart"); loadMode("smart"); return; }
         note.hidden = false;
         note.innerHTML = mode === "gems"
-          ? "No under-the-radar look-alikes for this one — try <b>Looks alike</b>."
+          ? "No under-the-radar look-alikes for this one - try <b>Looks alike</b>."
           : "Couldn't generate recommendations.";
         return;
       }
@@ -691,7 +691,7 @@
     grid.innerHTML = "";
 
     // Same-series titles belong to SMART only (series is metadata). Looks-alike
-    // stays purely visual and Hidden gems purely discovery — no series row there.
+    // stays purely visual and Hidden gems purely discovery - no series row there.
     var inSeries = {};
     if (mode === "smart" && currentSeries.length) {
       grid.appendChild(el("div", "grid-label", "More from this series"));
@@ -704,7 +704,7 @@
       recs.forEach(function (g) { g._match = matchInfo(g, sourceGame, mode); });
       recs.sort(function (a, b) { return b._match.pct - a._match.pct; });
     } else {
-      // Hidden gems show a ★ rating — order them by it, high → low.
+      // Hidden gems show a ★ rating - order them by it, high → low.
       recs.sort(function (a, b) { return (parseFloat(b.total_rating) || 0) - (parseFloat(a.total_rating) || 0); });
     }
     recs.forEach(function (g) {
@@ -796,7 +796,7 @@
     currentRecs.forEach(function (g, i) {
       var b = (i + 1) + ". " + g.name;
       if (g.release_year) b += " (" + g.release_year + ")";
-      var r = rating(g.total_rating); if (r) b += " — ★ " + r + "/100";
+      var r = rating(g.total_rating); if (r) b += " - ★ " + r + "/100";
       lines.push(b);
     });
     lines.push(""); lines.push("via PlayStation Game Recommender");
@@ -812,7 +812,7 @@
   // ============================================================ PHOTO SEARCH
   // Fully on-device and free: the photo is embedded in the browser with the
   // open-source CLIP model (transformers.js, Xenova/clip-vit-base-patch32, q8)
-  // — the SAME model that embedded every game's screenshots into game_clip_oss.
+  // - the SAME model that embedded every game's screenshots into game_clip_oss.
   // The resulting 512-d vector is matched by match_games_by_clip_oss (pgvector).
   // The model (~45 MB) downloads once and is then cached by the browser; the
   // photo itself never leaves the device. No server embedding, no API key.
@@ -826,7 +826,7 @@
     _embedderPromise = import(CLIP_LIB).then(function (T) {
       T.env.allowLocalModels = false;
       // GitHub Pages isn't cross-origin-isolated, so multi-threaded WASM and
-      // SharedArrayBuffer aren't available — pin to single-threaded WASM so
+      // SharedArrayBuffer aren't available - pin to single-threaded WASM so
       // onnxruntime-web runs reliably on iOS Safari.
       try { T.env.backends.onnx.wasm.numThreads = 1; } catch (e) {}
       return Promise.all([
@@ -838,7 +838,7 @@
     return _embedderPromise;
   }
 
-  // downscale to a small JPEG Blob first — keeps decoding light on phones and
+  // downscale to a small JPEG Blob first - keeps decoding light on phones and
   // the model resizes to 224 anyway
   function downscaleToBlob(file, max) {
     return new Promise(function (resolve, reject) {
@@ -909,7 +909,7 @@
       var card = el("div", "card");
       var cover = coverEl(g, "cover_big", 160, 226);
       var rr = rating(g.total_rating);
-      cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "—"));
+      cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "-"));
       card.appendChild(cover);
       card.appendChild(el("div", "card-name", g.name));
       var meta = [];
@@ -983,7 +983,7 @@
       var card = el("div", "card");
       var cover = coverEl(g, "cover_big", 160, 226);
       var rr = rating(g.total_rating);
-      cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "—"));
+      cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "-"));
       card.appendChild(cover);
       card.appendChild(el("div", "card-name", g.name));
       var meta = [];

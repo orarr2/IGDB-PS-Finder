@@ -1,7 +1,7 @@
 name: Build CLIP (free / OSS)
 
 # Embeds game screenshots with the open-source Xenova/clip-vit-base-patch32
-# model (transformers.js, CPU) into public.game_clip_oss. Fully free — no Jina,
+# model (transformers.js, CPU) into public.game_clip_oss. Fully free - no Jina,
 # no paid API. Resumable: re-dispatch until it reports failed=0 / no work left.
 #
 # Inputs:
@@ -43,7 +43,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' ../../docs/config.js)
-          # Writing into game_clip_oss needs the service_role key — the anon key
+          # Writing into game_clip_oss needs the service_role key - the anon key
           # in config.js is read-only under RLS. Fall back to anon if no secret.
           export SUPABASE_KEY="${SUPABASE_SERVICE_KEY:-$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' ../../docs/config.js)}"
           node embed.mjs

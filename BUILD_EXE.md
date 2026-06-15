@@ -11,13 +11,13 @@ pyinstaller --onefile --windowed --name "PSGameRecommender" `
     app.py
 ```
 
-Output: `dist/PSGameRecommender.exe` (~80–110 MB).
+Output: `dist/PSGameRecommender.exe` (~80-110 MB).
 
 ## Optional flags
 
-- `--icon=app.ico` — bundle a custom icon
-- `--noconfirm` — overwrite previous build without prompting
-- `--add-data "README.md;."` — bundle extra files
+- `--icon=app.ico` - bundle a custom icon
+- `--noconfirm` - overwrite previous build without prompting
+- `--add-data "README.md;."` - bundle extra files
 
 ## Common issues
 
