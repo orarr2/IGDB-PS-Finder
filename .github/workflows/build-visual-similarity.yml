@@ -29,7 +29,7 @@ permissions:
 jobs:
   compute:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 320
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +53,14 @@ jobs:
           export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' docs/config.js)
           export SUPABASE_KEY=$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' docs/config.js)
           python ml/visual_similarity.py
+
+      - name: Load neighbours into Supabase
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          pip install --quiet "supabase>=2,<3"
+          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' docs/config.js)
+          python ml/load_visual_neighbors.py
 
       - name: Commit results back to the branch
         run: |
