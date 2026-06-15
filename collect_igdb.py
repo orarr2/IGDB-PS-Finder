@@ -33,7 +33,12 @@ BASE_DIR = Path("igdb_dataset")
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-PLATFORMS = [48, 167]  # PS4, PS5
+# IGDB platform ids. Default to the full PlayStation family so a game's whole
+# series is captured (e.g. Uncharted 1–3 on PS3, not just Uncharted 4 on PS4).
+# Override with IGDB_PLATFORMS="48,167" to go back to PS4/PS5 only.
+#   7=PS1  8=PS2  9=PS3  38=PSP  46=PS Vita  48=PS4  167=PS5
+_DEFAULT_PLATFORMS = "7,8,9,38,46,48,167"
+PLATFORMS = [int(x) for x in os.environ.get("IGDB_PLATFORMS", _DEFAULT_PLATFORMS).split(",") if x.strip()]
 PLATFORMS_STR = ",".join(map(str, PLATFORMS))
 
 FIELDS = """
