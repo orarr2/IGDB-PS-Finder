@@ -54,15 +54,23 @@
     return fetch(u, { headers: headers() }).then(checkJson).then(function (rows) { return rows && rows[0]; });
   }
   function searchGames(q, lim) { return rpc("search_games", { q: q, lim: lim || 8 }); }
-  // Other titles in the same series, matched on IGDB franchise/collection
-  // (e.g. every game tagged with the "God of War" collection). This is far more
-  // reliable than name matching ("…Sons of Sparta" shares no prefix with "…Ragnarök").
+  // Other titles in the same series. Combines two signals so coverage is as
+  // complete as the data allows:
+  //   1. IGDB franchise/collection tag (accurate; collection preferred so a broad
+  //      franchise like "Marvel" doesn't drag in every Marvel game)
+  //   2. shared base name (catches siblings that exist but are mistagged, e.g.
+  //      "Uncharted 4" → other "Uncharted …" titles)
   function arrLit(list) {
     return "{" + list.map(function (s) { return '"' + String(s).replace(/(["\\])/g, "\\$1") + '"'; }).join(",") + "}";
   }
+  function seriesBase(name) {
+    var n = (name || "").split(/[:–—(]|\s-\s/)[0].trim();   // before ":", "–", "(", " - "
+    n = n.replace(/\s+\b([IVX]{1,4}|\d{1,2})\b\s*$/i, "").trim();      // drop trailing volume number
+    return n;
+  }
   function seriesGames(source) {
     if (!source) return Promise.resolve([]);
-    function lookup(s) {
+    function tagRows(s) {
       var co = arr(s.collections), fr = arr(s.franchises);
       var key = co.length ? co : fr;
       var col = co.length ? "collections" : "franchises";
@@ -71,12 +79,28 @@
         "&select=" + encodeURIComponent(GAME_COLS) + "&order=release_year.asc&limit=24";
       return fetch(u, { headers: headers() }).then(checkJson).catch(function () { return []; });
     }
-    // A source coming from a recommendation card may not carry franchise fields —
-    // fetch the full record first so series matching still works.
-    if (source.collections === undefined && source.franchises === undefined) {
-      return getGame(source.id).then(function (full) { return lookup(full || {}); }).catch(function () { return []; });
+    function nameRows(s) {
+      var base = seriesBase(s.name);
+      if (base.length < 4) return Promise.resolve([]);
+      var u = URL_BASE + "/rest/v1/games?name=ilike." + encodeURIComponent(base + "*") +
+        "&select=" + encodeURIComponent(GAME_COLS) + "&order=release_year.asc&limit=24";
+      return fetch(u, { headers: headers() }).then(checkJson).catch(function () { return []; });
     }
-    return lookup(source);
+    function run(s) {
+      return Promise.all([tagRows(s), nameRows(s)]).then(function (res) {
+        var seen = {}, out = [];
+        res[0].concat(res[1]).forEach(function (g) {
+          if (g && g.id != null && !seen[g.id]) { seen[g.id] = 1; out.push(g); }
+        });
+        out.sort(function (a, b) { return (a.release_year || 0) - (b.release_year || 0); });
+        return out;
+      });
+    }
+    // A source from a recommendation card may lack franchise fields — enrich first.
+    if (source.collections === undefined && source.franchises === undefined) {
+      return getGame(source.id).then(run).catch(function () { return []; });
+    }
+    return run(source);
   }
   function recommend(id) { return rpc("get_recommendations", { source_id: id, lim: REC_COUNT }); }
   function recommendVisual(id) { return rpc("get_visual_recommendations", { source_id: id, lim: REC_COUNT }); }
@@ -649,6 +673,9 @@
     if (mode !== "gems") {
       recs.forEach(function (g) { g._match = matchInfo(g, sourceGame); });
       recs.sort(function (a, b) { return b._match.pct - a._match.pct; });
+    } else {
+      // Hidden gems show a ★ rating — order them by it, high → low.
+      recs.sort(function (a, b) { return (parseFloat(b.total_rating) || 0) - (parseFloat(a.total_rating) || 0); });
     }
     recs.forEach(function (g) {
       if (inSeries[g.id]) return; // already shown above
