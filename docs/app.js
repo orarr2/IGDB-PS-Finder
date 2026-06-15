@@ -972,6 +972,18 @@
     host.hidden = false;
   }
 
+  // Keep the "games" stat on the home accurate (live total from the DB).
+  function updateGameCount() {
+    var node = $("#stat-games"); if (!node) return;
+    var h = headers(); h.Prefer = "count=exact";
+    fetch(URL_BASE + "/rest/v1/games?select=id&limit=1", { headers: h })
+      .then(function (r) {
+        var cr = r.headers.get("content-range"); // e.g. "0-0/7085"
+        var total = cr && cr.split("/")[1];
+        if (total && total !== "*") node.textContent = Number(total).toLocaleString();
+      }).catch(function () {});
+  }
+
   // ============================================================ UPCOMING (□ on home)
   function upcomingGames() {
     var nowIso = new Date().toISOString();
@@ -1070,6 +1082,7 @@
     var ml = $("#mylist-btn"); if (ml) ml.addEventListener("click", openSavedList);
     var up = $("#upcoming-btn"); if (up) up.addEventListener("click", openUpcoming);
     buildHomeDemo();
+    updateGameCount();
 
     // the press-and-hold preview must never get stuck on screen
     document.addEventListener("pointerup", hidePreview, true);
