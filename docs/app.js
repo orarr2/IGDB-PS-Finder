@@ -95,6 +95,39 @@
   var toastT;
   function toast(m) { var t = $("#toast"); if (!t) return; t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, 2200); }
 
+  // ---------- pill button (colored glyph + label in one button) ----------
+  function pillBtn(kind, glyph, label) {
+    var b = el("button", "pbtn pbtn-" + kind);
+    b.type = "button";
+    b.appendChild(el("span", "g", glyph));
+    b.appendChild(document.createTextNode(" " + label));
+    return b;
+  }
+
+  // ---------- "My List" (□ Save) — persisted locally on the device ----------
+  var SAVE_KEY = "psf_saved";
+  function getSaved() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || []; } catch (e) { return []; } }
+  function isSaved(id) { return getSaved().some(function (g) { return g.id === id; }); }
+  function toggleSave(game) {
+    var list = getSaved(), i = -1;
+    for (var k = 0; k < list.length; k++) { if (list[k].id === game.id) { i = k; break; } }
+    if (i >= 0) { list.splice(i, 1); toast("Removed from My List"); }
+    else {
+      list.unshift({ id: game.id, name: game.name, cover_id: game.cover_id,
+        release_year: game.release_year, total_rating: game.total_rating, genres: game.genres });
+      toast("Saved to My List");
+    }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(list)); } catch (e) {}
+    return i < 0;
+  }
+  function shareGame(game) {
+    var t = "Check out " + game.name + (game.release_year ? " (" + game.release_year + ")" : "") +
+      " — via PlayStation Game Recommender";
+    if (navigator.share) navigator.share({ title: game.name, text: t }).catch(function () {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(t).then(function () { toast("Copied to clipboard!"); });
+    else toast("Sharing not supported.");
+  }
+
   // ---------- navigation (simple stack) ----------
   var stack = ["home"];
   function show(view) { hidePreview(); document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); }); var v = $("#view-" + view); if (v) v.classList.add("active"); window.scrollTo(0, 0); }
@@ -295,9 +328,21 @@
     body.appendChild(pcSec);
     loadUserMedia(game, pcSec, pcStrip);
 
-    var cta = el("button", "btn-primary btn-block", "See " + REC_COUNT + " recommendations  →");
-    cta.addEventListener("click", function () { openRecs(game); });
-    body.appendChild(cta);
+    var actions = el("div", "detail-actions");
+    var recBtn = pillBtn("x", "✕", "See " + REC_COUNT + " recommendations");
+    recBtn.addEventListener("click", function () { openRecs(game); });
+    var saved0 = isSaved(game.id);
+    var saveBtn = pillBtn("sq", "□", saved0 ? "Saved" : "Save");
+    if (saved0) saveBtn.classList.add("on");
+    saveBtn.addEventListener("click", function () {
+      var nowSaved = toggleSave(game);
+      saveBtn.classList.toggle("on", nowSaved);
+      saveBtn.lastChild.textContent = " " + (nowSaved ? "Saved" : "Save");
+    });
+    var shareBtn = pillBtn("tr", "△", "Share");
+    shareBtn.addEventListener("click", function () { shareGame(game); });
+    actions.appendChild(recBtn); actions.appendChild(saveBtn); actions.appendChild(shareBtn);
+    body.appendChild(actions);
   }
 
   function loadUserMedia(game, sec, strip) {
@@ -533,6 +578,11 @@
   function renderRecs(recs, mode) {
     var grid = $("#recs-grid");
     grid.innerHTML = "";
+    // Show match-scored modes strictly high → low so the % never jumps around.
+    if (mode !== "gems") {
+      recs.forEach(function (g) { g._match = matchInfo(g, sourceGame); });
+      recs.sort(function (a, b) { return b._match.pct - a._match.pct; });
+    }
     recs.forEach(function (g) {
       var card = el("div", "card");
       var cover = coverEl(g, "cover_big", 160, 226);
@@ -766,6 +816,39 @@
     push("recs");
   }
 
+  // ============================================================ MY LIST (□)
+  function openSavedList() {
+    var saved = getSaved();
+    sourceGame = null; currentVisScores = {};
+    renderSourceBar(null, "<b>My List</b><br>" + saved.length + " saved game" + (saved.length === 1 ? "" : "s"));
+    var seg = $("#rec-mode"); if (seg) seg.hidden = true;
+    var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
+    var grid = $("#recs-grid"); grid.innerHTML = "";
+    var note = $("#recs-note");
+    if (!saved.length) {
+      note.hidden = false;
+      note.innerHTML = "Your list is empty. Open any game and tap <b>□ Save</b> to add it here.";
+      push("recs"); return;
+    }
+    note.hidden = true;
+    saved = saved.slice().sort(function (a, b) { return (parseFloat(b.total_rating) || 0) - (parseFloat(a.total_rating) || 0); });
+    saved.forEach(function (g) {
+      var card = el("div", "card");
+      var cover = coverEl(g, "cover_big", 160, 226);
+      var rr = rating(g.total_rating);
+      cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "—"));
+      card.appendChild(cover);
+      card.appendChild(el("div", "card-name", g.name));
+      var meta = [];
+      if (g.release_year) meta.push(String(g.release_year));
+      if (arr(g.genres).length) meta.push(arr(g.genres)[0]);
+      card.appendChild(el("div", "card-sub", meta.join("  ·  ")));
+      card.addEventListener("click", function () { openPick(g.id); });
+      grid.appendChild(card);
+    });
+    push("recs");
+  }
+
   // ============================================================ INIT
   function init() {
     if (!URL_BASE || !KEY) { alert("Missing backend config (config.js)."); return; }
@@ -783,6 +866,7 @@
       });
     });
     var s = $("#share-btn"); if (s) s.addEventListener("click", doShare);
+    var ml = $("#mylist-btn"); if (ml) ml.addEventListener("click", openSavedList);
 
     // the press-and-hold preview must never get stuck on screen
     document.addEventListener("pointerup", hidePreview, true);

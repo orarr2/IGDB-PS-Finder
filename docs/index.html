@@ -15,17 +15,24 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
 
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,800&display=swap" rel="stylesheet" />
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="app">
     <!-- ======================= HOME / SEARCH ======================= -->
     <section id="view-home" class="view active">
+      <header class="home-top">
+        <div class="brand-mark"><i>PlayStation</i> Finder</div>
+        <button id="mylist-btn" type="button" class="pbtn pbtn-sq" aria-label="My List"><span class="g">□</span> My&nbsp;List</button>
+      </header>
       <div class="home-inner">
         <div class="brand">
-          <div class="brand-glyph">▶</div>
-          <h1 class="title">PlayStation<br/>Game Recommender</h1>
-          <p class="subtitle">Tell me a game you loved — I'll find more like it.</p>
+          <h1 class="title">Find your next game</h1>
+          <p class="subtitle">Start from a game you love.</p>
         </div>
 
         <form id="search-form" class="search-bar" autocomplete="off" role="search">
@@ -35,13 +42,13 @@
                    aria-label="Search for a game" aria-autocomplete="list" />
             <ul id="suggest" class="suggest" hidden></ul>
           </div>
-          <button id="search-btn" type="submit" class="btn-primary" aria-label="Search">Go</button>
+          <button id="search-btn" type="submit" class="pbtn pbtn-x" aria-label="Go"><span class="g">✕</span> Go</button>
         </form>
 
         <div id="search-status" class="status" hidden></div>
 
         <div class="or-divider"><span>or</span></div>
-        <button id="photo-btn" type="button" class="btn-ghost photo-btn">Search by photo</button>
+        <button id="photo-btn" type="button" class="pbtn pbtn-tr photo-btn"><span class="g">△</span> Search by a photo</button>
         <input id="photo-input" type="file" accept="image/*" hidden />
         <p class="photo-hint">Snap or upload a game screenshot — we'll find games whose gameplay looks like it. Runs entirely on your device.</p>
 
@@ -52,8 +59,10 @@
     <!-- ======================= DETAIL ======================= -->
     <section id="view-detail" class="view">
       <header class="topbar">
-        <button class="btn-back" data-nav="back" aria-label="Back">‹ Back</button>
-        <button class="btn-ghost" data-nav="home" aria-label="Home">Home</button>
+        <button class="pbtn pbtn-o" data-nav="back" aria-label="Back"><span class="g">○</span> Back</button>
+        <div class="topbar-right">
+          <button class="topbar-home" data-nav="home" aria-label="Home">Home</button>
+        </div>
       </header>
       <div id="detail-body" class="detail-body"></div>
     </section>
@@ -61,9 +70,11 @@
     <!-- ======================= RECOMMENDATIONS ======================= -->
     <section id="view-recs" class="view">
       <header class="topbar">
-        <button class="btn-back" data-nav="back" aria-label="Back">‹ Back</button>
-        <button class="btn-ghost" data-nav="home" aria-label="Home">Home</button>
-        <button id="share-btn" class="btn-ghost" aria-label="Share">Share</button>
+        <button class="pbtn pbtn-o" data-nav="back" aria-label="Back"><span class="g">○</span> Back</button>
+        <div class="topbar-right">
+          <button class="topbar-home" data-nav="home" aria-label="Home">Home</button>
+          <button id="share-btn" class="pbtn pbtn-tr" aria-label="Share"><span class="g">△</span> Share</button>
+        </div>
       </header>
       <div id="rec-source" class="rec-source" hidden></div>
       <h2 id="recs-heading" class="recs-heading" hidden></h2>
