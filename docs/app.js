@@ -615,6 +615,7 @@
   function openRecs(source) {
     sourceGame = source;
     photoMatches = null;
+    var us = $("#upcoming-search"); if (us) us.hidden = true;
     renderSourceBar(source, "Recommendations for<br><b>" + esc(source.name) + "</b>");
     var seg = $("#rec-mode"); if (seg) seg.hidden = false;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = false;
@@ -912,6 +913,7 @@
     sourceGame = top;             // the identified game drives Smart / Hidden gems
     photoMatches = games.slice();  // Looks alike = the games that match the photo
     currentSeries = [];
+    var us = $("#upcoming-search"); if (us) us.hidden = true;
     renderSourceBar(top, "Your photo looks most like<br><b>" + esc(top.name) + "</b>");
     var seg = $("#rec-mode"); if (seg) seg.hidden = false;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = false;
@@ -985,47 +987,88 @@
   }
 
   // ============================================================ UPCOMING (□ on home)
-  function upcomingGames() {
-    var nowIso = new Date().toISOString();
-    var u = URL_BASE + "/rest/v1/games?release_date=gt." + encodeURIComponent(nowIso) +
-      "&select=" + encodeURIComponent(GAME_COLS + ",release_date") +
-      "&order=release_date.asc&limit=30";
-    return fetch(u, { headers: headers() }).then(checkJson).catch(function () { return []; });
-  }
   function fmtDate(d) {
     if (!d) return "TBA";
     var dt = new Date(d);
     return isNaN(dt) ? "TBA" : dt.toLocaleDateString(undefined, { month: "short", year: "numeric" });
   }
+  function upcomingCard(g) {
+    var card = el("div", "card");
+    var cover = coverEl(g, "cover_big", 160, 226);
+    cover.appendChild(el("div", "match-badge soon", fmtDate(g.release_date)));
+    card.appendChild(cover);
+    card.appendChild(el("div", "card-name", g.name));
+    var meta = [];
+    if (arr(g.genres).length) meta.push(arr(g.genres)[0]);
+    else if (arr(g.developers).length) meta.push(arr(g.developers)[0]);
+    card.appendChild(el("div", "card-sub", meta.join("  ·  ")));
+    card.addEventListener("click", function () { openPick(g.id); });
+    return card;
+  }
   function openUpcoming() {
     sourceGame = null; currentVisScores = {}; currentSeries = []; photoMatches = null;
-    renderSourceBar(null, "<b>Upcoming on PlayStation</b><br>sorted by release date");
+    renderSourceBar(null, "<b>Upcoming on PlayStation</b><br>most anticipated and releasing soon");
     var seg = $("#rec-mode"); if (seg) seg.hidden = true;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
-    var note = $("#recs-note"); note.hidden = true;
-    var grid = $("#recs-grid"); grid.innerHTML = "";
+    $("#recs-note").hidden = true;
+    $("#recs-grid").innerHTML = "";
+    var us = $("#upcoming-search");
+    us.hidden = false; us.innerHTML = "";
+    var inp = el("input", "upcoming-input");
+    inp.type = "search"; inp.placeholder = "Search upcoming games…";
+    us.appendChild(inp);
+    var t;
+    inp.addEventListener("input", function () {
+      clearTimeout(t);
+      var q = inp.value.trim();
+      t = setTimeout(function () { renderUpcoming(q); }, 250);
+    });
     push("recs");
+    renderUpcoming("");
+  }
+  function renderUpcoming(q) {
+    var grid = $("#recs-grid"); grid.innerHTML = "";
+    var note = $("#recs-note"); note.hidden = true;
+    var nowIso = new Date().toISOString();
+    var cols = encodeURIComponent(GAME_COLS + ",release_date,hypes");
     showSpinner(true);
-    upcomingGames().then(function (games) {
+    if (q && q.length >= 2) {
+      var u = URL_BASE + "/rest/v1/games?release_date=gt." + encodeURIComponent(nowIso) +
+        "&name=ilike." + encodeURIComponent("*" + q + "*") +
+        "&select=" + cols + "&order=release_date.asc&limit=30";
+      fetch(u, { headers: headers() }).then(checkJson).then(function (games) {
+        showSpinner(false);
+        if (!games.length) { note.hidden = false; note.innerHTML = "No upcoming games match “" + esc(q) + "”."; return; }
+        grid.appendChild(el("div", "grid-label", "Search results"));
+        games.forEach(function (g) { grid.appendChild(upcomingCard(g)); });
+      }).catch(function () { showSpinner(false); });
+      return;
+    }
+    var until = new Date(); until.setMonth(until.getMonth() + 3);
+    var antUrl = URL_BASE + "/rest/v1/games?release_date=gt." + encodeURIComponent(nowIso) +
+      "&select=" + cols + "&order=hypes.desc.nullslast&limit=8";
+    var soonUrl = URL_BASE + "/rest/v1/games?release_date=gt." + encodeURIComponent(nowIso) +
+      "&release_date=lte." + encodeURIComponent(until.toISOString()) +
+      "&select=" + cols + "&order=release_date.asc&limit=24";
+    Promise.all([
+      fetch(antUrl, { headers: headers() }).then(checkJson).catch(function () { return []; }),
+      fetch(soonUrl, { headers: headers() }).then(checkJson).catch(function () { return []; }),
+    ]).then(function (res) {
       showSpinner(false);
-      if (!games || !games.length) {
-        note.hidden = false;
-        note.innerHTML = "No upcoming releases in the catalogue right now - check back soon.";
+      var anticipated = res[0] || [], soon = res[1] || [];
+      if (!anticipated.length && !soon.length) {
+        note.hidden = false; note.innerHTML = "No upcoming releases in the catalogue right now.";
         return;
       }
-      games.forEach(function (g) {
-        var card = el("div", "card");
-        var cover = coverEl(g, "cover_big", 160, 226);
-        cover.appendChild(el("div", "match-badge soon", fmtDate(g.release_date)));
-        card.appendChild(cover);
-        card.appendChild(el("div", "card-name", g.name));
-        var meta = [];
-        if (arr(g.genres).length) meta.push(arr(g.genres)[0]);
-        else if (arr(g.developers).length) meta.push(arr(g.developers)[0]);
-        card.appendChild(el("div", "card-sub", meta.join("  ·  ")));
-        card.addEventListener("click", function () { openPick(g.id); });
-        grid.appendChild(card);
-      });
+      var seen = {};
+      if (anticipated.length) {
+        grid.appendChild(el("div", "grid-label", "Most anticipated"));
+        anticipated.forEach(function (g) { seen[g.id] = 1; grid.appendChild(upcomingCard(g)); });
+      }
+      if (soon.length) {
+        grid.appendChild(el("div", "grid-label", "Releasing in the next 3 months"));
+        soon.forEach(function (g) { if (!seen[g.id]) grid.appendChild(upcomingCard(g)); });
+      }
     });
   }
 
@@ -1033,6 +1076,7 @@
   function openSavedList() {
     var saved = getSaved();
     sourceGame = null; currentVisScores = {}; currentSeries = []; photoMatches = null;
+    var us = $("#upcoming-search"); if (us) us.hidden = true;
     renderSourceBar(null, "<b>My List</b><br>" + saved.length + " saved game" + (saved.length === 1 ? "" : "s"));
     var seg = $("#rec-mode"); if (seg) seg.hidden = true;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;

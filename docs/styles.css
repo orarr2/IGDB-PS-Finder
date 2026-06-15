@@ -91,6 +91,11 @@ button { font-family: inherit; cursor: pointer; }
 .pbtn-sq    { border-color: rgba(224,122,214,0.40); }
 .pbtn-sq.on { background: linear-gradient(180deg, rgba(224,122,214,0.30), rgba(224,122,214,0.10)); border-color: rgba(224,122,214,0.7); }
 
+/* Home is a house icon (neutral), kept visually distinct from the face buttons */
+.pbtn-home { border-color: rgba(160,180,210,0.3); }
+.pbtn-home .hg { width: 22px; height: 22px; fill: none; stroke: #cdd9f0; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.topbar .pbtn-home .hg { width: 18px; height: 18px; }
+
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 /* compact pills inside the top bars */
 .topbar .pbtn { padding: 9px 14px; font-size: 13px; }
@@ -358,6 +363,16 @@ img { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: none; }
 .match-badge.lo { background: #ff8a5c; color: #2a0f00; }
 .match-badge.series { background: #3a82ff; color: #fff; }
 .match-badge.soon { background: #7c4dff; color: #fff; }
+
+/* upcoming-games search box */
+.upcoming-search { padding: 8px 18px 2px; }
+.upcoming-input {
+  width: 100%; font-size: 16px; color: #fff; padding: 13px 15px;
+  border-radius: 14px; border: 2px solid var(--line);
+  background: rgba(255, 255, 255, 0.06); outline: none;
+}
+.upcoming-input:focus { border-color: var(--blue2); background: rgba(0, 114, 206, 0.10); }
+.upcoming-input::placeholder { color: #6f82a6; }
 
 /* full-width section label inside the recommendations grid */
 .grid-label {

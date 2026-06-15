@@ -44,7 +44,7 @@ PLATFORMS_STR = ",".join(map(str, PLATFORMS))
 FIELDS = """
     id, name, slug, summary, storyline,
     rating, rating_count, total_rating, total_rating_count,
-    aggregated_rating, aggregated_rating_count,
+    aggregated_rating, aggregated_rating_count, hypes,
     first_release_date, game_type, status,
     genres.name, themes.name, game_modes.name, player_perspectives.name,
     keywords.name,
@@ -210,6 +210,7 @@ def normalize_games(games: list[dict]) -> pd.DataFrame:
             "total_rating_count": g.get("total_rating_count", 0),
             "aggregated_rating": g.get("aggregated_rating"),
             "aggregated_rating_count": g.get("aggregated_rating_count", 0),
+            "hypes": g.get("hypes", 0),
             "weighted_score": weighted,
             "genres": genres,
             "themes": themes,
