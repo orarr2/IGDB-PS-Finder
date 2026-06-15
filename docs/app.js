@@ -922,6 +922,47 @@
     push("recs");
   }
 
+  // ============================================================ HOME DEMO
+  // A "how it works" gallery at the bottom of home, built from REAL cover art:
+  // because you loved God of War → its actual top matches. Tapping it runs the
+  // real recommendation flow for God of War.
+  function buildHomeDemo() {
+    var host = $("#home-demo");
+    if (!host) return;
+    var GOW = { id: 19560, name: "God of War", cover_id: "cobkt6" };
+    var matches = [
+      { id: 75235, name: "Ghost of Tsushima", cover_id: "co2crj", pct: 96 },
+      { id: 112875, name: "God of War Ragnarök", cover_id: "coba3d", pct: 94 },
+      { id: 119133, name: "Elden Ring", cover_id: "co4jni", pct: 91 },
+      { id: 11156, name: "Horizon Zero Dawn", cover_id: "co2una", pct: 90 },
+      { id: 25076, name: "Red Dead Redemption 2", cover_id: "co1q1f", pct: 88 },
+    ];
+    host.innerHTML = "";
+    host.appendChild(el("div", "howto-h", "SEE IT IN ACTION"));
+
+    var card = el("button", "demo"); card.type = "button";
+    var top = el("div", "demo-top");
+    var src = coverEl(GOW, "cover_small", 90, 128); src.classList.add("demo-src");
+    top.appendChild(src);
+    var because = el("div", "demo-because");
+    because.innerHTML = "Because you loved <b>God of War</b><span>Tap to see real matches →</span>";
+    top.appendChild(because);
+    card.appendChild(top);
+
+    var row = el("div", "demo-row");
+    matches.forEach(function (m) {
+      var cell = el("div", "demo-cell");
+      var cv = coverEl(m, "cover_small", 90, 128);
+      cv.appendChild(el("div", "match-badge " + (m.pct >= 75 ? "hi" : "mid"), m.pct + "%"));
+      cell.appendChild(cv);
+      row.appendChild(cell);
+    });
+    card.appendChild(row);
+    card.addEventListener("click", function () { openPick(GOW.id); });
+    host.appendChild(card);
+    host.hidden = false;
+  }
+
   // ============================================================ MY LIST (□)
   function openSavedList() {
     var saved = getSaved();
@@ -973,6 +1014,7 @@
     });
     var s = $("#share-btn"); if (s) s.addEventListener("click", doShare);
     var ml = $("#mylist-btn"); if (ml) ml.addEventListener("click", openSavedList);
+    buildHomeDemo();
 
     // the press-and-hold preview must never get stuck on screen
     document.addEventListener("pointerup", hidePreview, true);
