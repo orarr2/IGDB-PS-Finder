@@ -420,28 +420,49 @@
     }).catch(function () {});
   }
 
-  // ---------- match score ----------
-  // Blends three signals into one transparent "% match": gameplay look-alike
-  // (visual similarity — the main factor), shared genres, and release-year
-  // closeness. Returns the overall % plus each component for the breakdown.
-  function matchInfo(rec, src) {
+  // ---------- match score (per mode — never blended) ----------
+  // Smart  = metadata only: series/IGDB-similar, genres, themes, studio, rating.
+  // Visual = gameplay screenshot similarity only (computer vision / cosine).
+  // The two are kept strictly separate so the modes don't bleed into each other.
+  function matchInfo(rec, src, mode) {
     if (!src) src = {};
     var cos = currentVisScores[String(rec.id)];
+    var vis = (typeof cos === "number") ? clamp((cos - 0.5) / 0.45, 0, 1) : null;
+
     var sg = intersect(rec.genres, src.genres);
     var gMax = Math.min(3, Math.max(1, arr(src.genres).length));
     var genreOverlap = clamp(sg.length / gMax, 0, 1);
-    var yd = (rec.release_year && src.release_year) ? Math.abs(rec.release_year - src.release_year) : null;
-    var yearClose = yd == null ? 0 : clamp(1 - yd / 15, 0, 1);
-    var vis = (typeof cos === "number") ? clamp((cos - 0.5) / 0.45, 0, 1) : null;
-    var pct = vis != null
-      ? 0.65 * vis + 0.20 * genreOverlap + 0.15 * yearClose
-      : 0.60 * genreOverlap + 0.40 * yearClose;
+
+    var sth = intersect(rec.themes, src.themes);
+    var tMax = Math.min(3, Math.max(1, arr(src.themes).length));
+    var themeOverlap = arr(src.themes).length ? clamp(sth.length / tMax, 0, 1) : 0;
+
+    var devs = intersect(rec.developers, src.developers);
+    var isSimilar = arr(src.similar_games).map(String).indexOf(String(rec.id)) !== -1;
+    var sameSeries = (intersect(rec.collections, src.collections).length > 0) ||
+                     (intersect(rec.franchises, src.franchises).length > 0);
+    var rNum = parseFloat(rec.total_rating);
+    var ratingClose = isFinite(rNum) ? clamp(rNum / 100, 0, 1) : 0;
+
+    var pct;
+    if (mode === "visual") {
+      pct = vis != null ? vis : 0;                       // look-alike: vision only
+    } else {
+      pct = clamp(                                        // smart: metadata only
+        ((isSimilar || sameSeries) ? 0.45 : 0) +
+        0.30 * genreOverlap +
+        0.12 * themeOverlap +
+        (devs.length ? 0.08 : 0) +
+        0.05 * ratingClose, 0, 1);
+    }
     return {
+      mode: mode === "visual" ? "visual" : "smart",
       pct: Math.round(pct * 100),
       visPct: vis != null ? Math.round(vis * 100) : null,
       genrePct: Math.round(genreOverlap * 100),
-      yearPct: Math.round(yearClose * 100),
-      sharedGenres: sg, yearDiff: yd,
+      themePct: Math.round(themeOverlap * 100),
+      sharedGenres: sg, sharedThemes: sth, sharedDevs: devs,
+      isSimilar: isSimilar, sameSeries: sameSeries, ratingPct: Math.round(ratingClose * 100),
     };
   }
 
@@ -459,7 +480,7 @@
   }
 
   function scoreBlock(rec, src) {
-    var mi = rec._match || matchInfo(rec, src);
+    var mi = rec._match || matchInfo(rec, src, currentMode);
     var wrap = el("div", "score-block");
     var head = el("div", "score-head");
     head.appendChild(el("span", "score-big", mi.pct + "%"));
@@ -468,13 +489,21 @@
     head.appendChild(cap);
     wrap.appendChild(head);
     var rows = el("div", "score-rows");
-    if (mi.visPct != null)
-      rows.appendChild(scoreRow("Gameplay look-alike", mi.visPct, "main factor — how similar the in-game screenshots are"));
-    rows.appendChild(scoreRow("Shared genres", mi.genrePct,
-      mi.sharedGenres.length ? mi.sharedGenres.slice(0, 3).join(", ") : "none in common"));
-    if (mi.yearDiff != null)
-      rows.appendChild(scoreRow("Release era", mi.yearPct,
-        rec.release_year + " · " + mi.yearDiff + " year" + (mi.yearDiff === 1 ? "" : "s") + " apart"));
+    if (mi.mode === "visual") {
+      rows.appendChild(scoreRow("Gameplay look-alike", mi.visPct != null ? mi.visPct : 0,
+        "how similar the in-game screenshots are (computer vision)"));
+    } else {
+      if (mi.isSimilar || mi.sameSeries)
+        rows.appendChild(scoreRow("Series / IGDB-similar", 100,
+          mi.sameSeries ? "same series" : "flagged as similar by IGDB"));
+      rows.appendChild(scoreRow("Shared genres", mi.genrePct,
+        mi.sharedGenres.length ? mi.sharedGenres.slice(0, 3).join(", ") : "none in common"));
+      if (arr(src.themes).length)
+        rows.appendChild(scoreRow("Shared themes", mi.themePct,
+          mi.sharedThemes.length ? mi.sharedThemes.slice(0, 3).join(", ") : "none in common"));
+      if (mi.sharedDevs && mi.sharedDevs.length)
+        rows.appendChild(scoreRow("Same studio", 100, mi.sharedDevs.slice(0, 2).join(", ")));
+    }
     wrap.appendChild(rows);
     return wrap;
   }
@@ -641,7 +670,7 @@
       var rr = rating(g.total_rating);
       cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "rare"));
     } else {
-      var mi = g._match || matchInfo(g, sourceGame);
+      var mi = g._match || matchInfo(g, sourceGame, mode);
       g._match = mi;
       cover.appendChild(el("div", "match-badge " + (mi.pct >= 75 ? "hi" : mi.pct >= 50 ? "mid" : "lo"), mi.pct + "% match"));
     }
@@ -661,17 +690,18 @@
     var grid = $("#recs-grid");
     grid.innerHTML = "";
 
-    // Same-series titles first — for a fan, sequels/spin-offs are the best match.
+    // Same-series titles belong to SMART only (series is metadata). Looks-alike
+    // stays purely visual and Hidden gems purely discovery — no series row there.
     var inSeries = {};
-    if (currentSeries.length) {
+    if (mode === "smart" && currentSeries.length) {
       grid.appendChild(el("div", "grid-label", "More from this series"));
       currentSeries.forEach(function (g) { inSeries[g.id] = 1; grid.appendChild(recCard(g, "series")); });
       grid.appendChild(el("div", "grid-label", "More games like it"));
     }
 
-    // Show match-scored modes strictly high → low so the % never jumps around.
+    // Score & sort by the active mode's own signal, strictly high → low.
     if (mode !== "gems") {
-      recs.forEach(function (g) { g._match = matchInfo(g, sourceGame); });
+      recs.forEach(function (g) { g._match = matchInfo(g, sourceGame, mode); });
       recs.sort(function (a, b) { return b._match.pct - a._match.pct; });
     } else {
       // Hidden gems show a ★ rating — order them by it, high → low.
