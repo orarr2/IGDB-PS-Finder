@@ -595,6 +595,7 @@
   var currentMode = "visual";
   var currentVisScores = {};
   var currentSeries = [];
+  var photoMatches = null;   // when set, "Looks alike" shows the uploaded-photo matches
 
   function setActiveSeg(mode) {
     document.querySelectorAll("#rec-mode .seg").forEach(function (b) {
@@ -613,6 +614,7 @@
 
   function openRecs(source) {
     sourceGame = source;
+    photoMatches = null;
     renderSourceBar(source, "Recommendations for<br><b>" + esc(source.name) + "</b>");
     var seg = $("#rec-mode"); if (seg) seg.hidden = false;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = false;
@@ -639,6 +641,12 @@
     var grid = $("#recs-grid"), note = $("#recs-note");
     grid.innerHTML = "";
     note.hidden = true;
+    // Photo flow: "Looks alike" = the games that matched the uploaded photo.
+    if (mode === "visual" && photoMatches) {
+      currentRecs = photoMatches;
+      photoMatches.forEach(function (g) { grid.appendChild(recCard(g, "photo")); });
+      return;
+    }
     showSpinner(true);
     var p = mode === "visual" ? recommendVisual(sourceGame.id)
           : mode === "gems" ? recommendGems(sourceGame.id)
@@ -669,6 +677,10 @@
       // discovery mode: show quality (rating) rather than a source-match %
       var rr = rating(g.total_rating);
       cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "rare"));
+    } else if (mode === "photo") {
+      // photo matches: show the game's rating, not a source-match %
+      var rp = rating(g.total_rating);
+      cover.appendChild(el("div", "match-badge " + ratingClass(rp ? +rp : null), rp ? "★ " + rp : "-"));
     } else {
       var mi = g._match || matchInfo(g, sourceGame, mode);
       g._match = mi;
@@ -895,31 +907,28 @@
   }
 
   function openPhotoResults(games) {
-    sourceGame = null;
-    currentVisScores = {};
+    // games come back ranked by visual closeness to the photo (closest first).
+    var top = games[0];
+    sourceGame = top;             // the identified game drives Smart / Hidden gems
+    photoMatches = games.slice();  // Looks alike = the games that match the photo
     currentSeries = [];
-    renderSourceBar(null, "Games that look like<br><b>your photo</b>");
-    var seg = $("#rec-mode"); if (seg) seg.hidden = true;
-    var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
+    renderSourceBar(top, "Your photo looks most like<br><b>" + esc(top.name) + "</b>");
+    var seg = $("#rec-mode"); if (seg) seg.hidden = false;
+    var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = false;
     $("#recs-note").hidden = true;
-    var grid = $("#recs-grid"); grid.innerHTML = "";
-    // highest-rated visual matches first, and show the rating
-    games = games.slice().sort(function (a, b) { return (parseFloat(b.total_rating) || 0) - (parseFloat(a.total_rating) || 0); });
-    games.forEach(function (g) {
-      var card = el("div", "card");
-      var cover = coverEl(g, "cover_big", 160, 226);
-      var rr = rating(g.total_rating);
-      cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "-"));
-      card.appendChild(cover);
-      card.appendChild(el("div", "card-name", g.name));
-      var meta = [];
-      if (g.release_year) meta.push(String(g.release_year));
-      if (arr(g.genres).length) meta.push(arr(g.genres)[0]);
-      card.appendChild(el("div", "card-sub", meta.join("  ·  ")));
-      attachCardInteraction(card, g);
-      grid.appendChild(card);
-    });
     push("recs");
+    // Grab the top match's cosine scores so Smart match badges work, then show
+    // Looks alike (the photo matches) first.
+    showSpinner(true);
+    fetchVisScores(top.id).then(function (map) {
+      currentVisScores = map || {};
+      showSpinner(false);
+      setActiveSeg("visual");
+      loadMode("visual");
+    }).catch(function () {
+      currentVisScores = {}; showSpinner(false);
+      setActiveSeg("visual"); loadMode("visual");
+    });
   }
 
   // ============================================================ HOME DEMO
@@ -966,7 +975,7 @@
   // ============================================================ MY LIST (□)
   function openSavedList() {
     var saved = getSaved();
-    sourceGame = null; currentVisScores = {}; currentSeries = [];
+    sourceGame = null; currentVisScores = {}; currentSeries = []; photoMatches = null;
     renderSourceBar(null, "<b>My List</b><br>" + saved.length + " saved game" + (saved.length === 1 ? "" : "s"));
     var seg = $("#rec-mode"); if (seg) seg.hidden = true;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
