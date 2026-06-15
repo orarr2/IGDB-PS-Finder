@@ -32,6 +32,7 @@
     "id", "name", "release_year", "total_rating", "cover_id", "summary",
     "genres", "themes", "developers", "publishers",
     "game_modes", "similar_games", "screenshot_ids", "artwork_ids",
+    "franchises", "collections",
   ].join(",");
 
   // ---------- REST ----------
@@ -53,18 +54,29 @@
     return fetch(u, { headers: headers() }).then(checkJson).then(function (rows) { return rows && rows[0]; });
   }
   function searchGames(q, lim) { return rpc("search_games", { q: q, lim: lim || 8 }); }
-  // Other titles in the same series/franchise, matched by the base name
-  // (e.g. "God of War" → God of War, …Ragnarök, …Ghost of Sparta, …III).
+  // Other titles in the same series, matched on IGDB franchise/collection
+  // (e.g. every game tagged with the "God of War" collection). This is far more
+  // reliable than name matching ("…Sons of Sparta" shares no prefix with "…Ragnarök").
+  function arrLit(list) {
+    return "{" + list.map(function (s) { return '"' + String(s).replace(/(["\\])/g, "\\$1") + '"'; }).join(",") + "}";
+  }
   function seriesGames(source) {
-    var name = (source && source.name) || "";
-    var base = name.split(/[:\-–—(]/)[0].trim();      // drop subtitle after : - ( etc.
-    base = base.replace(/\s+\b([IVX]+|\d+)\b\s*$/i, "").trim(); // drop trailing volume number
-    if (base.length < 3) base = name.trim();
-    if (!base) return Promise.resolve([]);
-    var pat = base.replace(/[%*,]/g, " ").trim() + "*";
-    var u = URL_BASE + "/rest/v1/games?name=ilike." + encodeURIComponent(pat) +
-      "&select=" + encodeURIComponent(GAME_COLS) + "&order=release_year.asc&limit=24";
-    return fetch(u, { headers: headers() }).then(checkJson).catch(function () { return []; });
+    if (!source) return Promise.resolve([]);
+    function lookup(s) {
+      var co = arr(s.collections), fr = arr(s.franchises);
+      var key = co.length ? co : fr;
+      var col = co.length ? "collections" : "franchises";
+      if (!key.length) return Promise.resolve([]);
+      var u = URL_BASE + "/rest/v1/games?" + col + "=ov." + encodeURIComponent(arrLit(key)) +
+        "&select=" + encodeURIComponent(GAME_COLS) + "&order=release_year.asc&limit=24";
+      return fetch(u, { headers: headers() }).then(checkJson).catch(function () { return []; });
+    }
+    // A source coming from a recommendation card may not carry franchise fields —
+    // fetch the full record first so series matching still works.
+    if (source.collections === undefined && source.franchises === undefined) {
+      return getGame(source.id).then(function (full) { return lookup(full || {}); }).catch(function () { return []; });
+    }
+    return lookup(source);
   }
   function recommend(id) { return rpc("get_recommendations", { source_id: id, lim: REC_COUNT }); }
   function recommendVisual(id) { return rpc("get_visual_recommendations", { source_id: id, lim: REC_COUNT }); }
