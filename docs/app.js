@@ -53,6 +53,19 @@
     return fetch(u, { headers: headers() }).then(checkJson).then(function (rows) { return rows && rows[0]; });
   }
   function searchGames(q, lim) { return rpc("search_games", { q: q, lim: lim || 8 }); }
+  // Other titles in the same series/franchise, matched by the base name
+  // (e.g. "God of War" → God of War, …Ragnarök, …Ghost of Sparta, …III).
+  function seriesGames(source) {
+    var name = (source && source.name) || "";
+    var base = name.split(/[:\-–—(]/)[0].trim();      // drop subtitle after : - ( etc.
+    base = base.replace(/\s+\b([IVX]+|\d+)\b\s*$/i, "").trim(); // drop trailing volume number
+    if (base.length < 3) base = name.trim();
+    if (!base) return Promise.resolve([]);
+    var pat = base.replace(/[%*,]/g, " ").trim() + "*";
+    var u = URL_BASE + "/rest/v1/games?name=ilike." + encodeURIComponent(pat) +
+      "&select=" + encodeURIComponent(GAME_COLS) + "&order=release_year.asc&limit=24";
+    return fetch(u, { headers: headers() }).then(checkJson).catch(function () { return []; });
+  }
   function recommend(id) { return rpc("get_recommendations", { source_id: id, lim: REC_COUNT }); }
   function recommendVisual(id) { return rpc("get_visual_recommendations", { source_id: id, lim: REC_COUNT }); }
   function recommendGems(id) { return rpc("get_hidden_gems", { source_id: id, lim: REC_COUNT }); }
@@ -516,6 +529,7 @@
   var currentRecs = [];
   var currentMode = "visual";
   var currentVisScores = {};
+  var currentSeries = [];
 
   function setActiveSeg(mode) {
     document.querySelectorAll("#rec-mode .seg").forEach(function (b) {
@@ -539,9 +553,15 @@
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = false;
     push("recs");
     // Look-alike (visual) is the headline mode; grab its cosine scores first.
+    // Same-series titles are fetched alongside so fans see sequels/spin-offs up top.
     showSpinner(true);
-    fetchVisScores(source.id).then(function (map) {
-      currentVisScores = map || {};
+    Promise.all([fetchVisScores(source.id), seriesGames(source)]).then(function (res) {
+      currentVisScores = res[0] || {};
+      var seen = {};
+      currentSeries = (res[1] || []).filter(function (g) {
+        if (g.id === source.id || seen[g.id]) return false;
+        seen[g.id] = 1; return true;
+      });
       showSpinner(false);
       var hasVisual = Object.keys(currentVisScores).length > 0;
       setActiveSeg(hasVisual ? "visual" : "smart");
@@ -575,36 +595,52 @@
 
   function ratingClass(r) { return r == null ? "lo" : r >= 80 ? "hi" : r >= 65 ? "mid" : "lo"; }
 
+  function recCard(g, mode) {
+    var card = el("div", "card");
+    var cover = coverEl(g, "cover_big", 160, 226);
+    if (mode === "series") {
+      cover.appendChild(el("div", "match-badge series", "Series"));
+    } else if (mode === "gems") {
+      // discovery mode: show quality (rating) rather than a source-match %
+      var rr = rating(g.total_rating);
+      cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "rare"));
+    } else {
+      var mi = g._match || matchInfo(g, sourceGame);
+      g._match = mi;
+      cover.appendChild(el("div", "match-badge " + (mi.pct >= 75 ? "hi" : mi.pct >= 50 ? "mid" : "lo"), mi.pct + "% match"));
+    }
+    card.appendChild(cover);
+    card.appendChild(el("div", "card-name", g.name));
+    var sub = [];
+    if (g.release_year) sub.push(String(g.release_year));
+    var r = rating(g.total_rating); if (r) sub.push("★ " + r);
+    if (mode === "gems" && typeof g.total_rating_count === "number") sub.push(g.total_rating_count + " reviews");
+    else if (arr(g.genres).length) sub.push(arr(g.genres)[0]);
+    card.appendChild(el("div", "card-sub", sub.join("  ·  ")));
+    attachCardInteraction(card, g);
+    return card;
+  }
+
   function renderRecs(recs, mode) {
     var grid = $("#recs-grid");
     grid.innerHTML = "";
+
+    // Same-series titles first — for a fan, sequels/spin-offs are the best match.
+    var inSeries = {};
+    if (currentSeries.length) {
+      grid.appendChild(el("div", "grid-label", "More from this series"));
+      currentSeries.forEach(function (g) { inSeries[g.id] = 1; grid.appendChild(recCard(g, "series")); });
+      grid.appendChild(el("div", "grid-label", "More games like it"));
+    }
+
     // Show match-scored modes strictly high → low so the % never jumps around.
     if (mode !== "gems") {
       recs.forEach(function (g) { g._match = matchInfo(g, sourceGame); });
       recs.sort(function (a, b) { return b._match.pct - a._match.pct; });
     }
     recs.forEach(function (g) {
-      var card = el("div", "card");
-      var cover = coverEl(g, "cover_big", 160, 226);
-      if (mode === "gems") {
-        // discovery mode: show quality (rating) rather than a source-match %
-        var rr = rating(g.total_rating);
-        cover.appendChild(el("div", "match-badge " + ratingClass(rr ? +rr : null), rr ? "★ " + rr : "rare"));
-      } else {
-        var mi = matchInfo(g, sourceGame);
-        g._match = mi;
-        cover.appendChild(el("div", "match-badge " + (mi.pct >= 75 ? "hi" : mi.pct >= 50 ? "mid" : "lo"), mi.pct + "% match"));
-      }
-      card.appendChild(cover);
-      card.appendChild(el("div", "card-name", g.name));
-      var sub = [];
-      if (g.release_year) sub.push(String(g.release_year));
-      var r = rating(g.total_rating); if (r) sub.push("★ " + r);
-      if (mode === "gems" && typeof g.total_rating_count === "number") sub.push(g.total_rating_count + " reviews");
-      else if (arr(g.genres).length) sub.push(arr(g.genres)[0]);
-      card.appendChild(el("div", "card-sub", sub.join("  ·  ")));
-      attachCardInteraction(card, g);
-      grid.appendChild(card);
+      if (inSeries[g.id]) return; // already shown above
+      grid.appendChild(recCard(g, mode));
     });
   }
 
@@ -792,6 +828,7 @@
   function openPhotoResults(games) {
     sourceGame = null;
     currentVisScores = {};
+    currentSeries = [];
     renderSourceBar(null, "Games that look like<br><b>your photo</b>");
     var seg = $("#rec-mode"); if (seg) seg.hidden = true;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
@@ -819,7 +856,7 @@
   // ============================================================ MY LIST (□)
   function openSavedList() {
     var saved = getSaved();
-    sourceGame = null; currentVisScores = {};
+    sourceGame = null; currentVisScores = {}; currentSeries = [];
     renderSourceBar(null, "<b>My List</b><br>" + saved.length + " saved game" + (saved.length === 1 ? "" : "s"));
     var seg = $("#rec-mode"); if (seg) seg.hidden = true;
     var subEl = document.querySelector(".recs-sub"); if (subEl) subEl.hidden = true;
