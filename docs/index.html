@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <title>PlayStation Game Recommender</title>
+  <title>PS Finder</title>
   <meta name="description" content="Tell it a PS4/PS5 game you love and get recommendations with cover art, ratings, screenshots, and why each was picked for you." />
 
   <link rel="manifest" href="manifest.webmanifest" />
@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="PS Recommender" />
+  <meta name="apple-mobile-web-app-title" content="PS Finder" />
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
 
@@ -26,13 +26,12 @@
     <!-- ======================= HOME / SEARCH ======================= -->
     <section id="view-home" class="view active">
       <header class="home-top">
-        <div class="brand-mark"><i>PlayStation</i> Finder</div>
         <button id="mylist-btn" type="button" class="pbtn pbtn-sq" aria-label="My List"><span class="g">□</span> My&nbsp;List</button>
       </header>
       <div class="home-inner">
         <div class="brand">
-          <h1 class="title">Find your next game</h1>
-          <p class="subtitle">Start from a game you love.</p>
+          <img class="ps-logo" src="ps-finder-logo.svg" alt="PS Finder" width="348" height="128" />
+          <p class="subtitle">Tell me a game you loved — I'll find more like it.</p>
         </div>
 
         <form id="search-form" class="search-bar" autocomplete="off" role="search">

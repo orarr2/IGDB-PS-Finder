@@ -1,6 +1,6 @@
 {
-  "name": "PlayStation Game Recommender",
-  "short_name": "PS Recommender",
+  "name": "PS Finder",
+  "short_name": "PS Finder",
   "description": "Tell it a PS4/PS5 game you love and get nine real recommendations with cover art and ratings.",
   "start_url": "./index.html",
   "scope": "./",

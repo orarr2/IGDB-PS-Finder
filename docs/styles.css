@@ -103,12 +103,15 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------- home ---------- */
 .home-top {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: flex-end;
   padding: calc(var(--safe-top) + 14px) 18px 2px;
 }
-.brand-mark { font-weight: 900; font-size: 18px; letter-spacing: -0.4px; color: #fff; }
-.brand-mark i { font-style: italic; }
 .home-top .pbtn { padding: 9px 14px; font-size: 13px; }
+.ps-logo {
+  display: block; width: 100%; max-width: 360px; height: auto; margin: 0 auto 4px;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  filter: drop-shadow(0 6px 18px rgba(0,0,0,0.45));
+}
 
 .home-inner {
   display: flex; flex-direction: column;
