@@ -1,19 +1,44 @@
-# IGDB PlayStation Game Recommender
+# PS Finder - PlayStation game recommender
 
-A desktop game-recommendation app for PS4/PS5, built on data pulled from the
-[IGDB API](https://api-docs.igdb.com/) and served from a Supabase Postgres
-database. Type a game you like, see its details, and get nine recommendations
-you might enjoy - with cover art, ratings, and a one-click share.
+**Live app: https://orarr2.github.io/IGDB-PlayStation-Games-recommendations-by-cover-photos-with-gradient-boosting/**
 
-![flow: Home → Detail → Recommendations](docs/flow.png)
+<p align="center">
+  <img src="docs/ps-finder-logo.svg" alt="PS Finder" width="340">
+</p>
 
-## 📱 iPhone app
+Tell it a PlayStation game you love and get real recommendations - ranked by
+metadata (**Smart**), by how the gameplay actually *looks* using computer vision
+(**Looks alike**), or surfaced as under-the-radar **Hidden gems**. You can also
+search by a screenshot, browse **Upcoming** releases, and keep a **My List**.
+It covers 7,000+ PS1-PS5 titles from the [IGDB API](https://api-docs.igdb.com/),
+served from a Supabase Postgres database.
 
-There's now an installable **iPhone app** in [`docs/`](docs/) - a Progressive
-Web App you add to your Home Screen from Safari (no App Store, no Mac, no Xcode).
-It talks to the same live backend, so it returns the same real recommendations.
-It's served via GitHub Pages (Deploy from a branch → `/docs`). See
-[`docs/README.md`](docs/README.md) for the two-minute setup.
+## Install on iPhone / iPad
+
+PS Finder is a Progressive Web App, so there's no App Store, no Mac and no Xcode:
+
+1. Open the **live app** link above in **Safari** (it has to be Safari on iOS).
+2. Tap the **Share** button (the square with an up-arrow, at the bottom of the screen).
+3. Scroll down the share sheet and tap **Add to Home Screen**.
+4. Tap **Add** (top right).
+
+It now sits on your Home Screen with its own icon and opens full-screen, like a
+native app. On **Android**, open the link in Chrome, then use the menu and tap
+**Install app** / **Add to Home screen**.
+
+## What it does
+
+- **Three recommendation modes** - Smart (metadata: genres, themes, studio,
+  series), Looks alike (computer vision on real gameplay screenshots), and
+  Hidden gems (highly rated but obscure).
+- **Search by a photo** - upload a screenshot and it finds games that look like
+  it, running fully on your device.
+- **Upcoming** - the most anticipated titles plus everything releasing in the
+  next three months.
+- **My List**, cover art, ratings, a screenshot gallery, and one-tap share.
+
+The web/iOS app lives in [`docs/`](docs/) and is served via GitHub Pages. A
+PyQt6 desktop version and the data pipeline are also in this repo (below).
 
 ## What's in the repo
 
