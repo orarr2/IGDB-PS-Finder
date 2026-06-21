@@ -1,6 +1,6 @@
 # PS Finder - PlayStation game recommender
 
-**Live app: https://orarr2.github.io/IGDB-PlayStation-Games-recommendations-by-cover-photos-with-gradient-boosting/**
+**Live app: https://orarr2.github.io/IGDB-PS-Finder/**
 
 <p align="center">
   <img src="docs/ps-finder-logo.png" alt="PS Finder" width="380">
