@@ -1,7 +1,7 @@
 name: Collect player media
 
 # Collects player-captured screenshots (links + attribution) from Steam Community
-# and Reddit, and commits the result (ml/user_media.json) back to the branch.
+# and Reddit, and commits the result (src/ml/user_media.json) back to the branch.
 # That JSON is then loaded into public.user_media, shown in the app's
 # "Player captures" section.
 #
@@ -14,8 +14,8 @@ on:
     branches:
       - main
     paths:
-      - "ml/collect_user_media.py"
-      - "ml/pilot_games.json"
+      - "src/ml/collect_user_media.py"
+      - "src/ml/pilot_games.json"
       - ".github/workflows/collect-user-media.yml"
 
 permissions:
@@ -33,18 +33,18 @@ jobs:
       - run: pip install requests
       - name: Collect links (Steam, from the curated pilot list)
         env:
-          GAMES_FILE: ml/pilot_games.json
+          GAMES_FILE: src/ml/pilot_games.json
           PER_GAME: "4"
-        run: python ml/collect_user_media.py
+        run: python src/ml/collect_user_media.py
       - name: Commit results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ml/user_media.json
+          git add src/ml/user_media.json
           git commit -m "Add collected user_media links [skip ci]" || { echo "no changes"; exit 0; }
           git push
       - uses: actions/upload-artifact@v4
         with:
           name: user-media
-          path: ml/user_media.json
+          path: src/ml/user_media.json
           if-no-files-found: warn

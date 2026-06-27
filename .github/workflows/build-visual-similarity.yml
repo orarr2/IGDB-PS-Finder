@@ -2,7 +2,7 @@ name: Compute visual similarity
 
 # Runs the computer-vision pipeline (download IGDB gameplay screenshots → CNN
 # embeddings → nearest visual neighbours) and commits the result
-# (ml/visual_neighbors.json) back to the branch. That JSON is then loaded into
+# (src/ml/visual_neighbors.json) back to the branch. That JSON is then loaded into
 # the Supabase `visual_neighbors` table, which the app reads via
 # get_visual_recommendations().
 #
@@ -19,8 +19,8 @@ on:
     branches:
       - main
     paths:
-      - "ml/visual_similarity.py"
-      - "ml/requirements.txt"
+      - "src/ml/visual_similarity.py"
+      - "src/ml/requirements.txt"
       - ".github/workflows/build-visual-similarity.yml"
 
 permissions:
@@ -39,7 +39,7 @@ jobs:
 
       - name: Install deps
         run: |
-          pip install -r ml/requirements.txt
+          pip install -r src/ml/requirements.txt
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install onnx onnxscript
 
@@ -49,24 +49,24 @@ jobs:
           TOPK: "12"
           LIMIT: ${{ github.event.inputs.limit || '0' }}
         run: |
-          # the anon key is public (it ships in docs/config.js); read it from there
-          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' docs/config.js)
-          export SUPABASE_KEY=$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' docs/config.js)
-          python ml/visual_similarity.py
+          # anon key is public (ships in src/docs/config.js); read it from there
+          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' src/docs/config.js)
+          export SUPABASE_KEY=$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' src/docs/config.js)
+          python src/ml/visual_similarity.py
 
       - name: Load neighbours into Supabase
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           pip install --quiet "supabase>=2,<3"
-          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' docs/config.js)
-          python ml/load_visual_neighbors.py
+          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' src/docs/config.js)
+          python src/ml/load_visual_neighbors.py
 
       - name: Commit results back to the branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ml/visual_neighbors.json ml/embeddings docs/models
+          git add src/ml/visual_neighbors.json src/ml/embeddings src/docs/models
           git commit -m "Add visual embeddings, neighbours and ONNX model [skip ci]" || { echo "no changes"; exit 0; }
           git push
 
@@ -74,6 +74,6 @@ jobs:
         with:
           name: visual-data
           path: |
-            ml/visual_neighbors.json
-            ml/embeddings/*.json
+            src/ml/visual_neighbors.json
+            src/ml/embeddings/*.json
           if-no-files-found: warn

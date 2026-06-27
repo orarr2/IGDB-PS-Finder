@@ -15,7 +15,7 @@ on:
     branches:
       - main
     paths:
-      - "android/**"
+      - "src/android/**"
       - ".github/workflows/build-android-apk.yml"
 
 permissions:
@@ -57,7 +57,7 @@ jobs:
           ls "$ANDROID_SDK_ROOT"
 
       - name: Generate a signing key
-        working-directory: android
+        working-directory: src/android
         run: |
           keytool -genkeypair -v \
             -keystore android.keystore \
@@ -67,7 +67,7 @@ jobs:
             -dname "CN=PS Recommender, OU=App, O=orarr2, L=NA, S=NA, C=NA"
 
       - name: Build the APK
-        working-directory: android
+        working-directory: src/android
         env:
           BUBBLEWRAP_KEYSTORE_PASSWORD: psrecommender
           BUBBLEWRAP_KEY_PASSWORD: psrecommender
@@ -84,6 +84,6 @@ jobs:
         with:
           name: ps-recommender-apk
           path: |
-            android/*.apk
-            android/app-release-bundle.aab
+            src/android/*.apk
+            src/android/app-release-bundle.aab
           if-no-files-found: warn

@@ -32,10 +32,10 @@ jobs:
         with:
           node-version: "20"
       - name: Install deps
-        working-directory: ml/clip_oss
+        working-directory: src/ml/clip_oss
         run: npm install --no-audit --no-fund
       - name: Embed catalog
-        working-directory: ml/clip_oss
+        working-directory: src/ml/clip_oss
         env:
           LIMIT: ${{ github.event.inputs.limit }}
           SHOTS: ${{ github.event.inputs.shots }}

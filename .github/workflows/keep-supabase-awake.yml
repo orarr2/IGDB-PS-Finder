@@ -10,7 +10,7 @@ name: Keep Supabase awake
 # outage is visible instead of silently letting the project sleep.
 #
 # The URL and key below are the PUBLIC anon credentials (the same ones shipped
-# in docs/config.js). Row-Level Security allows anonymous reads only, so they
+# in src/docs/config.js). Row-Level Security allows anonymous reads only, so they
 # are safe to keep here. To override them, set the SUPABASE_URL / SUPABASE_ANON_KEY
 # repository secrets.
 

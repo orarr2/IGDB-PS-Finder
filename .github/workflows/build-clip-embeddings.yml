@@ -1,7 +1,7 @@
 name: Compute CLIP embeddings
 
 # Embeds every game's gameplay screenshots with CLIP (jina-clip-v1) and commits
-# the per-screenshot vectors (ml/clip_embeddings/) for semantic photo search.
+# the per-screenshot vectors (src/ml/clip_embeddings/) for semantic photo search.
 # Run: Actions → "Compute CLIP embeddings" → Run workflow.
 
 on:
@@ -13,7 +13,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "ml/clip_embeddings.py"
+      - "src/ml/clip_embeddings.py"
       - ".github/workflows/build-clip-embeddings.yml"
 
 permissions:
@@ -40,20 +40,20 @@ jobs:
           SHOTS: "3"
           LIMIT: ${{ github.event.inputs.limit || '0' }}
         run: |
-          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' docs/config.js)
-          export SUPABASE_KEY=$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' docs/config.js)
-          python ml/clip_embeddings.py
+          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' src/docs/config.js)
+          export SUPABASE_KEY=$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' src/docs/config.js)
+          python src/ml/clip_embeddings.py
 
       - name: Commit results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ml/clip_embeddings
+          git add src/ml/clip_embeddings
           git commit -m "Add CLIP screenshot embeddings [skip ci]" || { echo "no changes"; exit 0; }
           git push
 
       - uses: actions/upload-artifact@v4
         with:
           name: clip-embeddings
-          path: ml/clip_embeddings/*.json
+          path: src/ml/clip_embeddings/*.json
           if-no-files-found: warn

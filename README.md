@@ -3,7 +3,7 @@
 **Live app: https://orarr2.github.io/IGDB-PS-Finder/**
 
 <p align="center">
-  <img src="docs/ps-finder-logo.png" alt="PS Finder" width="380">
+  <img src="src/docs/ps-finder-logo.png" alt="PS Finder" width="380">
 </p>
 
 Tell it a PlayStation game you love and get real recommendations - ranked by
@@ -37,18 +37,22 @@ native app. On **Android**, open the link in Chrome, then use the menu and tap
   next three months.
 - **My List**, cover art, ratings, a screenshot gallery, and one-tap share.
 
-The web/iOS app lives in [`docs/`](docs/) and is served via GitHub Pages. A
-PyQt6 desktop version and the data pipeline are also in this repo (below).
+The web/iOS app lives in [`src/docs/`](src/docs/) and is served via GitHub
+Pages. A PyQt6 desktop version and the data pipeline are also in this repo
+(below).
 
 ## What's in the repo
 
+Everything that isn't the README or the `.github/` workflow folder lives
+under `src/`:
+
 | Path | Purpose |
 |---|---|
-| `docs/` | Web/iOS PWA (the live app, served via GitHub Pages) |
-| `desktop_app/` | PyQt6 desktop app + IGDB data pipeline (see [`desktop_app/README.md`](desktop_app/README.md)) |
-| `ml/` | Visual-similarity pipeline (CLIP embeddings, neighbours, ONNX export) |
-| `migrations/` | Supabase SQL migrations |
-| `android/` | TWA manifest for the Android APK build |
+| `src/docs/` | Web/iOS PWA (the live app, served via GitHub Pages) |
+| `src/desktop_app/` | PyQt6 desktop app + IGDB data pipeline (see [`src/desktop_app/README.md`](src/desktop_app/README.md)) |
+| `src/ml/` | Visual-similarity pipeline (CLIP embeddings, neighbours, ONNX export) |
+| `src/migrations/` | Supabase SQL migrations |
+| `src/android/` | TWA manifest for the Android APK build |
 | `.github/workflows/` | CI: dataset refresh, embedding builds, Pages deploy, APK build |
 | `.env.example` | Required environment variables |
 
@@ -73,8 +77,8 @@ Top-9 by score wins. Results are produced server-side in one round-trip.
 ### 1. Supabase project
 
 1. Create a Supabase project (any region).
-2. Apply the migrations in `migrations/` (schema is one `games` table plus the
-   `search_games` and `get_recommendations` RPC functions).
+2. Apply the migrations in `src/migrations/` (schema is one `games` table plus
+   the `search_games` and `get_recommendations` RPC functions).
 3. From **Project Settings → API Keys**, copy:
    - `URL` → `SUPABASE_URL`
    - `service_role` key → `SUPABASE_SERVICE_KEY` (for the one-time load, never
@@ -97,22 +101,22 @@ cp .env.example .env
 
 ```bash
 pip install requests pandas tqdm pyarrow supabase PyQt6
-python desktop_app/collect_igdb.py        # ~20 seconds, writes igdb_dataset/data/games.parquet
-python desktop_app/load_to_supabase.py    # ~10 seconds, upserts the rows
+python src/desktop_app/collect_igdb.py        # ~20 seconds, writes igdb_dataset/data/games.parquet
+python src/desktop_app/load_to_supabase.py    # ~10 seconds, upserts the rows
 ```
 
 ### 5. Run the desktop app
 
 ```bash
-python desktop_app/app.py
+python src/desktop_app/app.py
 ```
 
-Or double-click **`desktop_app/Launch Recommender.bat`** on Windows - it
+Or double-click **`src/desktop_app/Launch Recommender.bat`** on Windows - it
 installs deps and loads `.env` automatically.
 
 ## Building a standalone `.exe`
 
-See [`desktop_app/BUILD_EXE.md`](desktop_app/BUILD_EXE.md).
+See [`src/desktop_app/BUILD_EXE.md`](src/desktop_app/BUILD_EXE.md).
 
 ## Notes
 
@@ -126,5 +130,5 @@ See [`desktop_app/BUILD_EXE.md`](desktop_app/BUILD_EXE.md).
   the repo name hints at. That model is a planned next step - bring your own
   CNN on the cover images.
 - **IGDB API change:** the old `category = 0` filter (main games) no longer
-  works; the field was renamed `game_type`. `desktop_app/collect_igdb.py`
+  works; the field was renamed `game_type`. `src/desktop_app/collect_igdb.py`
   already uses the new name. If you reuse the notebook, patch that line first.

@@ -55,7 +55,7 @@ simple **"Deploy from a branch"** method - no Actions workflow needed.
 Your iPhone and computer must be on the same Wi-Fi network.
 
 ```bash
-cd docs
+cd src/docs
 python3 -m http.server 8000
 ```
 
@@ -86,7 +86,7 @@ in real Chrome, **screenshots and cover art are full quality**.
   and uploads the APK as a downloadable artifact. Run it from the **Actions**
   tab → **Run workflow**, then download **`ps-recommender-apk`** from the run and
   sideload it (you'll allow "install from unknown sources"). The TWA config lives
-  in `android/twa-manifest.json`.
+  in `src/android/twa-manifest.json`.
 
 > To hide the small URL bar in a TWA, the APK's signing fingerprint must be
 > published in a `/.well-known/assetlinks.json` on the domain. PWABuilder walks
@@ -128,7 +128,7 @@ only**, so the key cannot change or delete any data.
 ## Verify it yourself
 
 ```bash
-cd docs/test
+cd src/docs/test
 npm install
 npm test
 ```

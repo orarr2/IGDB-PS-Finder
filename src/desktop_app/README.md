@@ -1,7 +1,7 @@
 # Desktop app + data pipeline
 
 The PyQt6 desktop version of PS Finder, plus the scripts that build the
-Supabase dataset. The live web/iOS app is in `../docs/`.
+Supabase dataset. The live web/iOS app is in [`../docs/`](../docs/).
 
 | File | Purpose |
 |---|---|
@@ -18,12 +18,12 @@ variables.
 ## Run
 
 ```bash
-python desktop_app/app.py
+python src/desktop_app/app.py
 ```
 
 ## Refresh the dataset (one time, or whenever IGDB changes)
 
 ```bash
-python desktop_app/collect_igdb.py        # writes igdb_dataset/data/games.parquet
-python desktop_app/load_to_supabase.py    # upserts into Supabase
+python src/desktop_app/collect_igdb.py        # writes igdb_dataset/data/games.parquet
+python src/desktop_app/load_to_supabase.py    # upserts into Supabase
 ```
