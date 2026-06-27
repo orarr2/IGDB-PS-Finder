@@ -5,7 +5,7 @@ exactly what the Jina embeddings API returns for an uploaded photo.
 Per screenshot (not averaged) → stored in pgvector; a query photo then matches
 the single most-similar screenshot of each game ("best scene" retrieval).
 
-Output: ml/clip_embeddings/clip_NN.json shards
+Output: src/ml/clip_embeddings/clip_NN.json shards
         {"items":[{"game_id":id,"shot":idx,"v":[768 floats]}, ...]}
 
 Env: SUPABASE_URL, SUPABASE_KEY (anon; read game list)
@@ -26,7 +26,7 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 SHOTS = int(os.environ.get("SHOTS", "3"))
 CHUNK = int(os.environ.get("CHUNK", "200"))
 LIMIT = int(os.environ.get("LIMIT", "0"))
-OUTDIR = "ml/clip_embeddings"
+OUTDIR = "src/ml/clip_embeddings"
 
 IMG = "https://images.igdb.com/igdb/image/upload/t_screenshot_med/{}.jpg"
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36"

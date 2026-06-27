@@ -5,17 +5,17 @@ community screenshots via Steam's screenshot AJAX endpoint, and read each
 screenshot's full-resolution image URL from its details page. We store only the
 image URL + source link (attribution) - never the file itself.
 
-Output -> ml/user_media.json, later loaded into public.user_media.
+Output -> src/ml/user_media.json, later loaded into public.user_media.
 
 Game list source (in priority order):
-  - GAMES_FILE env (a JSON array of {id,name}); default ml/pilot_games.json
+  - GAMES_FILE env (a JSON array of {id,name}); default src/ml/pilot_games.json
   - else Supabase REST (needs SUPABASE_URL / SUPABASE_KEY), most-reviewed first
 
 Env:
-  GAMES_FILE   path to a JSON [{id,name}]   (default ml/pilot_games.json)
+  GAMES_FILE   path to a JSON [{id,name}]   (default src/ml/pilot_games.json)
   PER_GAME     screenshots per game         (default 4)
   MODE/PILOT_N used only for the Supabase path
-  OUT          output path                  (default ml/user_media.json)
+  OUT          output path                  (default src/ml/user_media.json)
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ import time
 import requests
 
 PER_GAME = int(os.environ.get("PER_GAME", "4"))
-OUT = os.environ.get("OUT", "ml/user_media.json")
-GAMES_FILE = os.environ.get("GAMES_FILE", "ml/pilot_games.json")
+OUT = os.environ.get("OUT", "src/ml/user_media.json")
+GAMES_FILE = os.environ.get("GAMES_FILE", "src/ml/pilot_games.json")
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")

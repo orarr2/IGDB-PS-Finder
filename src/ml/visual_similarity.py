@@ -6,7 +6,7 @@ For every PS4/PS5 game we:
   3. average the screenshot embeddings into one per-game "visual fingerprint",
   4. find each game's nearest visual neighbours by cosine similarity.
 
-The result is written to ml/visual_neighbors.json:
+The result is written to src/ml/visual_neighbors.json:
     { "model": ..., "dim": ..., "shots": N, "count": G,
       "neighbors": { "<game_id>": { "ids": [...], "scores": [...] } } }
 
@@ -17,7 +17,7 @@ Env:
   SHOTS   screenshots per game        (default 3)
   TOPK    neighbours per game         (default 12)
   LIMIT   cap number of games, 0=all  (default 0, for quick test runs)
-  OUT     output path                 (default ml/visual_neighbors.json)
+  OUT     output path                 (default src/ml/visual_neighbors.json)
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 SHOTS = int(os.environ.get("SHOTS", "3"))
 TOPK = int(os.environ.get("TOPK", "12"))
 LIMIT = int(os.environ.get("LIMIT", "0"))
-OUT = os.environ.get("OUT", "ml/visual_neighbors.json")
+OUT = os.environ.get("OUT", "src/ml/visual_neighbors.json")
 
 IMG = "https://images.igdb.com/igdb/image/upload/t_screenshot_med/{}.jpg"
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
@@ -82,7 +82,7 @@ def load_model():
     return model, pre
 
 
-def export_onnx(model, path="docs/models/mobilenet_v3_small.onnx"):
+def export_onnx(model, path="src/docs/models/mobilenet_v3_small.onnx"):
     """Export the same feature extractor for in-browser (onnxruntime-web) use,
     so a photo embedded in the browser is comparable to the stored game vectors.
     Input: normalised 1x3x224x224 (ImageNet)."""
@@ -196,10 +196,10 @@ def main() -> int:
 
     # per-game vectors for in-browser photo search (loaded into pgvector), sharded
     emb = [{"id": ids[i], "v": [round(float(x), 5) for x in vecs[i]]} for i in range(len(ids))]
-    os.makedirs("ml/embeddings", exist_ok=True)
+    os.makedirs("src/ml/embeddings", exist_ok=True)
     SH = 1000
     for s in range(0, len(emb), SH):
-        p = f"ml/embeddings/game_embeddings_{s // SH:02d}.json"
+        p = f"src/ml/embeddings/game_embeddings_{s // SH:02d}.json"
         json.dump({"items": emb[s:s + SH]}, open(p, "w"))
         log("wrote", p, len(emb[s:s + SH]))
     return 0

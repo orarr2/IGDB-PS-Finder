@@ -11,7 +11,7 @@ Design goals (learned the hard way):
     the proxy with many parallel batches gets almost everything rate-limited.
   * Honest - prints a clear success ratio so a half-finished run is obvious.
 
-Output: ml/clip_v2/clip_NN.json  {"items":[{"game_id","shot","v":[1024]}]}
+Output: src/ml/clip_v2/clip_NN.json  {"items":[{"game_id","shot","v":[1024]}]}
 Env: SUPABASE_URL, SUPABASE_KEY (anon), SHOTS (default 4), LIMIT (0=all)
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ BATCH = 8            # images per proxy call (smaller = lighter on the function)
 EMBED_WORKERS = 2    # parallel proxy calls (low, to stay under the rate limit)
 ATTEMPTS = 6         # per-batch retries
 CHECKPOINT = 60      # commit+push progress every N successful batches
-OUTDIR = "ml/clip_v2"
+OUTDIR = "src/ml/clip_v2"
 SHARD = 1500
 IMG = "https://images.igdb.com/igdb/image/upload/t_screenshot_med/{}.jpg"
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36"

@@ -8,7 +8,7 @@ Required environment variables:
     SUPABASE_SERVICE_KEY   service_role key (writes bypass RLS)
 
 Optional:
-    NEIGHBORS_JSON   default ml/visual_neighbors.json
+    NEIGHBORS_JSON   default src/ml/visual_neighbors.json
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from supabase import create_client
 
 URL = os.environ.get("SUPABASE_URL")
 KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-PATH = os.environ.get("NEIGHBORS_JSON", "ml/visual_neighbors.json")
+PATH = os.environ.get("NEIGHBORS_JSON", "src/ml/visual_neighbors.json")
 
 
 def main() -> int:
