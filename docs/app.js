@@ -46,12 +46,25 @@
     if (!r.ok) return r.text().then(function (t) { throw new Error("Server " + r.status + (t ? ": " + t.slice(0, 120) : "")); });
     return r.json();
   }
+  // Hard ceiling on how many rows any single read may return. Every REST GET
+  // goes through restGet() and every RPC through rpc(), so the app stays
+  // bounded no matter how large the dataset grows - a missing or oversized
+  // "limit" is clamped to MAX_ROWS here rather than pulling the whole table.
+  var MAX_ROWS = 200;
+  function capUrl(u) {
+    var m = u.match(/[?&]limit=(\d+)/);
+    if (!m) return u + (u.indexOf("?") >= 0 ? "&" : "?") + "limit=" + MAX_ROWS;
+    if (parseInt(m[1], 10) > MAX_ROWS) return u.replace(/([?&]limit=)\d+/, "$1" + MAX_ROWS);
+    return u;
+  }
+  function restGet(u) { return fetch(capUrl(u), { headers: headers() }); }
   function rpc(fn, body) {
+    if (body && typeof body.lim === "number" && body.lim > MAX_ROWS) body.lim = MAX_ROWS;
     return fetch(URL_BASE + "/rest/v1/rpc/" + fn, { method: "POST", headers: headers(), body: JSON.stringify(body) }).then(checkJson);
   }
   function getGame(id) {
     var u = URL_BASE + "/rest/v1/games?id=eq." + encodeURIComponent(id) + "&select=" + encodeURIComponent(GAME_COLS) + "&limit=1";
-    return fetch(u, { headers: headers() }).then(checkJson).then(function (rows) { return rows && rows[0]; });
+    return restGet(u).then(checkJson).then(function (rows) { return rows && rows[0]; });
   }
   function searchGames(q, lim) { return rpc("search_games", { q: q, lim: lim || 8 }); }
   // Other titles in the same series. Combines two signals so coverage is as
@@ -77,14 +90,14 @@
       if (!key.length) return Promise.resolve([]);
       var u = URL_BASE + "/rest/v1/games?" + col + "=ov." + encodeURIComponent(arrLit(key)) +
         "&select=" + encodeURIComponent(GAME_COLS) + "&order=release_year.asc&limit=24";
-      return fetch(u, { headers: headers() }).then(checkJson).catch(function () { return []; });
+      return restGet(u).then(checkJson).catch(function () { return []; });
     }
     function nameRows(s) {
       var base = seriesBase(s.name);
       if (base.length < 4) return Promise.resolve([]);
       var u = URL_BASE + "/rest/v1/games?name=ilike." + encodeURIComponent(base + "*") +
         "&select=" + encodeURIComponent(GAME_COLS) + "&order=release_year.asc&limit=24";
-      return fetch(u, { headers: headers() }).then(checkJson).catch(function () { return []; });
+      return restGet(u).then(checkJson).catch(function () { return []; });
     }
     function run(s) {
       return Promise.all([tagRows(s), nameRows(s)]).then(function (res) {
@@ -109,13 +122,13 @@
     var cols = "source,image_url,thumb_url,author,source_url,caption";
     var u = URL_BASE + "/rest/v1/user_media?game_id=eq." + encodeURIComponent(id) +
       "&select=" + encodeURIComponent(cols) + "&limit=12";
-    return fetch(u, { headers: headers() }).then(checkJson);
+    return restGet(u).then(checkJson);
   }
   // visual-similarity cosine scores for a source game's neighbours → {id: cos}
   function fetchVisScores(id) {
     var u = URL_BASE + "/rest/v1/visual_neighbors?game_id=eq." + encodeURIComponent(id) +
       "&select=neighbor_ids,scores&limit=1";
-    return fetch(u, { headers: headers() }).then(checkJson).then(function (rows) {
+    return restGet(u).then(checkJson).then(function (rows) {
       var map = {};
       if (rows && rows[0]) {
         var ids = rows[0].neighbor_ids || [], sc = rows[0].scores || [];
@@ -1036,7 +1049,7 @@
       var u = URL_BASE + "/rest/v1/games?release_date=gt." + encodeURIComponent(nowIso) +
         "&name=ilike." + encodeURIComponent("*" + q + "*") +
         "&select=" + cols + "&order=release_date.asc&limit=30";
-      fetch(u, { headers: headers() }).then(checkJson).then(function (games) {
+      restGet(u).then(checkJson).then(function (games) {
         showSpinner(false);
         if (!games.length) { note.hidden = false; note.innerHTML = "No upcoming games match “" + esc(q) + "”."; return; }
         grid.appendChild(el("div", "grid-label", "Search results"));
@@ -1051,8 +1064,8 @@
       "&release_date=lte." + encodeURIComponent(until.toISOString()) +
       "&select=" + cols + "&order=release_date.asc&limit=24";
     Promise.all([
-      fetch(antUrl, { headers: headers() }).then(checkJson).catch(function () { return []; }),
-      fetch(soonUrl, { headers: headers() }).then(checkJson).catch(function () { return []; }),
+      restGet(antUrl).then(checkJson).catch(function () { return []; }),
+      restGet(soonUrl).then(checkJson).catch(function () { return []; }),
     ]).then(function (res) {
       showSpinner(false);
       var anticipated = res[0] || [], soon = res[1] || [];

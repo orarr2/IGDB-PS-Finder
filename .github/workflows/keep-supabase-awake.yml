@@ -1,0 +1,43 @@
+name: Keep Supabase awake
+
+# Free-plan Supabase projects are paused automatically after ~7 days with no
+# activity. This job sends a tiny read request to the Data API on a schedule so
+# the project always counts as active and never pauses.
+#
+# It runs every 2 days (well inside the 7-day window, leaving margin for the
+# occasional run GitHub delays or skips). It can also be run manually from the
+# Actions tab. The job fails loudly if the project does not answer, so a real
+# outage is visible instead of silently letting the project sleep.
+#
+# The URL and key below are the PUBLIC anon credentials (the same ones shipped
+# in docs/config.js). Row-Level Security allows anonymous reads only, so they
+# are safe to keep here. To override them, set the SUPABASE_URL / SUPABASE_ANON_KEY
+# repository secrets.
+
+on:
+  schedule:
+    - cron: "0 7 */2 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the Data API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          URL="${SUPABASE_URL:-https://zttqvoqpwtxchxsglard.supabase.co}"
+          KEY="${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0dHF2b3Fwd3R4Y2h4c2dsYXJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDk0NzQsImV4cCI6MjA5NjY4NTQ3NH0.CU2rcRgQtGcHmwY6thpf-NNKLnb-WtJzzj8WrzxO3Qo}"
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+            "$URL/rest/v1/games?select=id&limit=1")
+          echo "Data API responded with HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Supabase did not return 200 - project may be paused or down."
+            exit 1
+          fi
