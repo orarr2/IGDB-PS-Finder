@@ -3,7 +3,7 @@
 Run AFTER igdb_data_collection.ipynb has produced igdb_dataset/data/games.parquet.
 
 Required environment variables:
-    SUPABASE_URL          e.g. https://zttqvoqpwtxchxsglard.supabase.co
+    SUPABASE_URL          e.g. https://your-project-ref.supabase.co
     SUPABASE_SERVICE_KEY  service_role key (sb_secret_... or JWT)
 
 Optional:
