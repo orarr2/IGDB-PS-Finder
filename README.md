@@ -42,14 +42,14 @@ PyQt6 desktop version and the data pipeline are also in this repo (below).
 
 ## What's in the repo
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `app.py` | PyQt6 desktop app - three screens (Home / Detail / Recommendations) |
-| `collect_igdb.py` | One-shot script that pulls PS4/PS5 metadata from IGDB into `games.parquet` |
-| `load_to_supabase.py` | Idempotent upsert of `games.parquet` into Supabase `public.games` |
-| `igdb_data_collection.ipynb` | Original notebook that also downloads cover/screenshot images for ML work |
-| `Launch Recommender.bat` | Double-click launcher on Windows |
-| `BUILD_EXE.md` | PyInstaller recipe for a standalone `.exe` |
+| `docs/` | Web/iOS PWA (the live app, served via GitHub Pages) |
+| `desktop_app/` | PyQt6 desktop app + IGDB data pipeline (see [`desktop_app/README.md`](desktop_app/README.md)) |
+| `ml/` | Visual-similarity pipeline (CLIP embeddings, neighbours, ONNX export) |
+| `migrations/` | Supabase SQL migrations |
+| `android/` | TWA manifest for the Android APK build |
+| `.github/workflows/` | CI: dataset refresh, embedding builds, Pages deploy, APK build |
 | `.env.example` | Required environment variables |
 
 ## How recommendations work
@@ -73,9 +73,8 @@ Top-9 by score wins. Results are produced server-side in one round-trip.
 ### 1. Supabase project
 
 1. Create a Supabase project (any region).
-2. Apply the migrations in `migrations/` (or just paste the SQL from
-   `collect_igdb.py`'s docstring into the SQL editor - schema is one `games`
-   table plus two RPC functions, `search_games` and `get_recommendations`).
+2. Apply the migrations in `migrations/` (schema is one `games` table plus the
+   `search_games` and `get_recommendations` RPC functions).
 3. From **Project Settings → API Keys**, copy:
    - `URL` → `SUPABASE_URL`
    - `service_role` key → `SUPABASE_SERVICE_KEY` (for the one-time load, never
@@ -97,31 +96,23 @@ cp .env.example .env
 ### 4. Load the dataset (one time)
 
 ```bash
-pip install -r requirements.txt  # or: pip install requests pandas tqdm pyarrow supabase PyQt6
-python collect_igdb.py            # ~20 seconds, writes igdb_dataset/data/games.parquet
-python load_to_supabase.py        # ~10 seconds, upserts 3,840 rows
+pip install requests pandas tqdm pyarrow supabase PyQt6
+python desktop_app/collect_igdb.py        # ~20 seconds, writes igdb_dataset/data/games.parquet
+python desktop_app/load_to_supabase.py    # ~10 seconds, upserts the rows
 ```
 
-### 5. Run the app
+### 5. Run the desktop app
 
 ```bash
-python app.py
+python desktop_app/app.py
 ```
 
-Or double-click **`Launch Recommender.bat`** on Windows - it installs deps and
-loads `.env` automatically.
+Or double-click **`desktop_app/Launch Recommender.bat`** on Windows - it
+installs deps and loads `.env` automatically.
 
 ## Building a standalone `.exe`
 
-See [`BUILD_EXE.md`](BUILD_EXE.md). The short version:
-
-```powershell
-pip install pyinstaller
-pyinstaller --onefile --windowed --name PSGameRecommender `
-    --hidden-import=supabase --hidden-import=postgrest --hidden-import=gotrue `
-    --hidden-import=storage3 --hidden-import=realtime --hidden-import=supafunc `
-    app.py
-```
+See [`desktop_app/BUILD_EXE.md`](desktop_app/BUILD_EXE.md).
 
 ## Notes
 
@@ -135,5 +126,5 @@ pyinstaller --onefile --windowed --name PSGameRecommender `
   the repo name hints at. That model is a planned next step - bring your own
   CNN on the cover images.
 - **IGDB API change:** the old `category = 0` filter (main games) no longer
-  works; the field was renamed `game_type`. `collect_igdb.py` already uses the
-  new name. If you reuse the notebook, patch that line first.
+  works; the field was renamed `game_type`. `desktop_app/collect_igdb.py`
+  already uses the new name. If you reuse the notebook, patch that line first.

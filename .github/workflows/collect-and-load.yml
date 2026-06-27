@@ -35,14 +35,14 @@ jobs:
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
           IGDB_PLATFORMS: ${{ github.event.inputs.platforms }}
-        run: python collect_igdb.py
+        run: python desktop_app/collect_igdb.py
 
       - name: Load into Supabase (upsert by id)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           PARQUET_PATH: igdb_dataset/data/games.parquet
-        run: python load_to_supabase.py
+        run: python desktop_app/load_to_supabase.py
 
       - name: Summary
         run: echo "Done. Dataset collected and upserted into Supabase. Existing rows are updated, new ones added (nothing deleted)."
