@@ -179,7 +179,9 @@ below, then dispatch from the **Actions** tab:
 3. **Compute CLIP embeddings** - jina-clip-v1 (768-d) per-screenshot vectors,
    committed as JSON under `src/ml/clip_embeddings/` and upserted into the
    `game_clip_embeddings` table by `src/ml/load_clip_embeddings.py`. Powers
-   **Hidden gems**.
+   **Hidden gems**. Resumable and self-chaining: it embeds only games not yet
+   in the table and re-dispatches itself until the whole catalog is covered,
+   so one dispatch is enough.
 
 Everything can also run locally: `pip install -r src/ml/requirements.txt` and
 run the same scripts with `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` in the
@@ -209,7 +211,7 @@ the `SUPABASE_SERVICE_KEY` repository secret (plus `TWITCH_CLIENT_ID` /
 | Collect IGDB & load into Supabase | manual | Refreshes the dataset: `collect_igdb.py` → `games.parquet` → upsert into `games` (updates rows, never deletes) |
 | Build CLIP (free / OSS) | manual | Embeds screenshots (512-d) into `game_clip_oss` - **photo search** |
 | Compute visual similarity | manual + push to its script | CNN embeddings → `visual_neighbors` table - **Looks alike** |
-| Compute CLIP embeddings | manual + push to its script | jina-clip-v1 vectors (768-d) committed to `src/ml/clip_embeddings/` and upserted into `game_clip_embeddings` - **Hidden gems** |
+| Compute CLIP embeddings | manual + push to its script (self-chains) | jina-clip-v1 vectors (768-d) committed to `src/ml/clip_embeddings/` and upserted into `game_clip_embeddings` - **Hidden gems**. Embeds only uncovered games and re-dispatches itself until the catalog is done |
 | Rebuild CLIP v2 | manual | jina-clip-v2 (1024-d) re-embed via the edge-function proxy (needs Jina credit) |
 | Collect player media | manual + push to its script | Steam/Reddit player screenshots → `user_media` table |
 | Build Android APK | manual + push to `src/android/` | Wraps the live PWA into a TWA with Bubblewrap; APK as artifact |

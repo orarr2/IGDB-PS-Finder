@@ -4,6 +4,11 @@ name: Compute CLIP embeddings
 # the per-screenshot vectors (src/ml/clip_embeddings/), and upserts them into
 # the game_clip_embeddings table that Hidden gems reads (needs the
 # SUPABASE_SERVICE_KEY repository secret; the load step is skipped without it).
+#
+# Resumable + self-chaining: the script only embeds games not yet in the
+# table, stops cleanly before the job timeout, and the last step re-dispatches
+# this workflow while uncovered games remain - so one dispatch (or one push)
+# eventually covers the whole catalog.
 # Run: Actions → "Compute CLIP embeddings" → Run workflow.
 
 on:
@@ -20,6 +25,7 @@ on:
 
 permissions:
   contents: write
+  actions: write  # the chain step re-dispatches this workflow
 
 jobs:
   compute:
@@ -43,10 +49,12 @@ jobs:
         env:
           SHOTS: "3"
           LIMIT: ${{ github.event.inputs.limit || '0' }}
+          TIME_BUDGET_MIN: "150"
         run: |
+          set -o pipefail
           export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' src/docs/config.js)
           export SUPABASE_KEY=$(grep -oP 'SUPABASE_KEY:\s*"\K[^"]+' src/docs/config.js)
-          python src/ml/clip_embeddings.py
+          python src/ml/clip_embeddings.py 2>&1 | tee embed.log
 
       - name: Commit results
         run: |
@@ -66,6 +74,24 @@ jobs:
       - name: Load skipped
         if: env.SUPABASE_SERVICE_KEY == ''
         run: echo "::warning::SUPABASE_SERVICE_KEY secret not set - vectors were committed but NOT loaded into the game_clip_embeddings table."
+
+      - name: Chain the next run while games remain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          summary=$(grep -o 'SUMMARY processed=[0-9]* remaining=[0-9]*' embed.log | tail -1)
+          processed=$(echo "$summary" | grep -o 'processed=[0-9]*' | cut -d= -f2)
+          remaining=$(echo "$summary" | grep -o 'remaining=[0-9]*' | cut -d= -f2)
+          echo "This run: processed=${processed:-?} remaining=${remaining:-?}"
+          if [ "${processed:-0}" -gt 0 ] && [ "${remaining:-0}" -gt 0 ]; then
+            echo "Re-dispatching for the remaining $remaining games."
+            curl -sS -o /dev/null -w "dispatch HTTP:%{http_code}\n" -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/build-clip-embeddings.yml/dispatches" \
+              -d '{"ref":"main"}'
+          else
+            echo "Nothing left to chain - catalog covered (or nothing processable this run)."
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
