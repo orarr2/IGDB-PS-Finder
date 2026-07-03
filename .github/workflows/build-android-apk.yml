@@ -73,9 +73,14 @@ jobs:
           BUBBLEWRAP_KEY_PASSWORD: psrecommender
         run: |
           bubblewrap doctor || true
-          # `bubblewrap build` asks "regenerate your project? (Y/n)" when there's
-          # no generated project yet; auto-answer yes since CI has no stdin.
-          yes | bubblewrap build --skipPwaValidation
+          # Generate/refresh the Android project from twa-manifest.json without
+          # prompting. --skipVersionUpgrade suppresses the "versionName for the
+          # new App version" question that used to swallow a `yes |` stream and
+          # hang the build. stdin is closed so any unexpected prompt fails fast
+          # and loudly instead of looping; the keystore passwords come from the
+          # BUBBLEWRAP_* env vars above.
+          bubblewrap update --skipVersionUpgrade < /dev/null
+          bubblewrap build --skipPwaValidation < /dev/null
           echo "--- build output ---"
           ls -la
 
