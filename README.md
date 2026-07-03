@@ -132,7 +132,7 @@ re-rank so obscure shovelware can't outrank the games people actually play.
 
 1. Create a Supabase project (any region).
 2. In the SQL editor, run the files in [`src/migrations/`](src/migrations/)
-   **in order, `0000` → `0007`**. `0000_baseline.sql` creates everything from
+   **in order, `0000` → `0010`**. `0000_baseline.sql` creates everything from
    scratch - the `pg_trgm` and `vector` (pgvector) extensions, the `games`
    table, the vector tables, indexes, read-only RLS policies and the base RPC
    functions; the later files layer on the current recommendation engines.

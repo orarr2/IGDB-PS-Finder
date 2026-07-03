@@ -58,9 +58,17 @@
     return u;
   }
   function restGet(u) { return fetch(capUrl(u), { headers: headers() }); }
+  // All RPCs are read-only, so retrying is safe. The first vector query after
+  // the database sat idle can exceed the server's statement timeout while the
+  // cold cache warms up - and that failed attempt itself does the warming, so
+  // one retry after a short pause almost always succeeds.
   function rpc(fn, body) {
     if (body && typeof body.lim === "number" && body.lim > MAX_ROWS) body.lim = MAX_ROWS;
-    return fetch(URL_BASE + "/rest/v1/rpc/" + fn, { method: "POST", headers: headers(), body: JSON.stringify(body) }).then(checkJson);
+    var call = function () {
+      return fetch(URL_BASE + "/rest/v1/rpc/" + fn, { method: "POST", headers: headers(), body: JSON.stringify(body) });
+    };
+    var later = function () { return new Promise(function (res) { setTimeout(res, 700); }).then(call); };
+    return call().then(function (r) { return r.status >= 500 ? later() : r; }, later).then(checkJson);
   }
   function getGame(id) {
     var u = URL_BASE + "/rest/v1/games?id=eq." + encodeURIComponent(id) + "&select=" + encodeURIComponent(GAME_COLS) + "&limit=1";
