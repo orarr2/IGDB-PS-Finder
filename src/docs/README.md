@@ -1,5 +1,9 @@
 # PS Finder - the web / iPhone / Android app
 
+> This file covers **running and installing the app**. Setup from scratch,
+> architecture, how the engines score, and troubleshooting live in the
+> [top-level README](../../README.md) - that's the source of truth.
+
 This folder is the live app - a complete, installable **Progressive Web App**.
 It installs to your Home Screen with its own icon, runs full-screen with no
 browser chrome, and works offline for the shell.
@@ -143,6 +147,7 @@ in real Chrome, **screenshots and cover art are full quality**.
 | `sw.js` | Service worker - installability + offline shell + cover cache |
 | `icons/` | Home-screen app icons |
 | `models/` | ONNX copy of the vision model, committed by CI |
+| `screenshots/` | App screenshots embedded in the top-level README |
 | `test/` | Headless verification of the full flow (`npm test`) |
 
 ## The key is safe to ship

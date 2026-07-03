@@ -13,6 +13,13 @@ search by a screenshot, browse **Upcoming** releases, and keep a **My List**.
 It covers 7,000+ PS1-PS5 titles from the [IGDB API](https://api-docs.igdb.com/),
 served from a Supabase Postgres database.
 
+<p align="center">
+  <img src="src/docs/screenshots/search.jpg"           width="24%" alt="Type-ahead search with covers and ratings">
+  <img src="src/docs/screenshots/detail.jpg"           width="24%" alt="Game detail - rating, genres, screenshots">
+  <img src="src/docs/screenshots/recs-smart.jpg"       width="24%" alt="Smart recommendations - series first">
+  <img src="src/docs/screenshots/recs-hidden-gems.jpg" width="24%" alt="Hidden gems - great games with few reviews">
+</p>
+
 ## Install on iPhone / iPad
 
 PS Finder is a Progressive Web App, so there's no App Store, no Mac and no Xcode:
@@ -55,6 +62,33 @@ under `src/`:
 | `src/android/` | TWA manifest for the Android APK build |
 | `.github/workflows/` | CI: dataset refresh, embedding builds, Pages deploy, APK build |
 | `.env.example` | Required environment variables |
+
+## Architecture
+
+```mermaid
+flowchart TD
+  igdb["IGDB API<br/>(Twitch OAuth)"] -->|"collect_igdb.py"| pq["games.parquet"]
+  pq -->|"load_to_supabase.py<br/>(service key)"| g
+  cdn["IGDB image CDN"] -->|"gameplay screenshots"| ml["src/ml/ vision pipelines<br/>(GitHub Actions, CPU)"]
+  ml -->|"CLIP 512-d"| oss
+  ml -->|"jina-clip 768-d"| emb
+  ml -->|"CNN nearest neighbours"| vn
+  subgraph db["Supabase Postgres + pgvector (RLS: public read-only)"]
+    g[("games")]
+    oss[("game_clip_oss")]
+    emb[("game_clip_embeddings")]
+    vn[("visual_neighbors")]
+    rpc{{"RPC functions<br/>search_games · get_recommendations ·<br/>get_visual_recommendations · get_hidden_gems ·<br/>match_games_by_clip_oss"}}
+  end
+  g --> rpc
+  oss --> rpc
+  emb --> rpc
+  vn --> rpc
+  rpc -->|"publishable key"| pwa["Web / iOS / Android PWA<br/>src/docs/ on GitHub Pages"]
+  rpc -->|"publishable key"| desk["Desktop app<br/>(PyQt6)"]
+  photo["Your photo"] -->|"on-device CLIP<br/>(transformers.js)"| pwa
+  cdn -.->|"covers & screenshots<br/>at view time"| pwa
+```
 
 ## How recommendations work
 
@@ -182,6 +216,47 @@ the `SUPABASE_SERVICE_KEY` repository secret (plus `TWITCH_CLIENT_ID` /
 | Build Android APK | manual + push to `src/android/` | Wraps the live PWA into a TWA with Bubblewrap; APK as artifact |
 | Keep Supabase awake | every 2 days (cron) | Pings the Data API so the free-plan project never auto-pauses |
 | Deploy app to GitHub Pages | manual | Fallback Actions-based Pages deploy. **Not the live method** - the site is served with "Deploy from a branch" (see below), and dispatching this changes the URL layout |
+
+## Troubleshooting
+
+**The app opens but every search fails ("Network error").**
+Free-plan Supabase projects auto-pause after ~7 days without traffic. The
+"Keep Supabase awake" workflow prevents that, but if the repo (or the workflow)
+was ever disabled, open the Supabase dashboard and hit **Restore project**.
+Quick health check:
+`curl "$SUPABASE_URL/rest/v1/games?select=id&limit=1" -H "apikey: $SUPABASE_ANON_KEY"`
+should return HTTP 200 with one row.
+
+**Search works but a recommendation tab is empty.**
+That tab's vector data hasn't been built (Setup step 5). Looks alike reads
+`visual_neighbors`, Hidden gems reads `game_clip_embeddings`, photo search
+reads `game_clip_oss` - each is filled by its own workflow.
+
+**Photo search hangs the first time.**
+The CLIP model (~30 MB) is downloaded to the device on first use and cached
+after that. On a slow connection the first photo can take a while; later
+searches are fast and even work with spotty connectivity.
+
+**The "Compute visual similarity" workflow fails at the load step.**
+The `SUPABASE_SERVICE_KEY` repository secret is missing (Settings → Secrets
+and variables → Actions). The compute part runs with the public anon key, but
+writing `visual_neighbors` needs the service role.
+
+**The installed home-screen app looks stale after an update.**
+The service worker is network-first, so a normal close-and-reopen picks up the
+newest build. If it's still stale, remove the icon from the Home Screen and
+add it again from Safari/Chrome.
+
+**Rotating the Supabase keys.**
+Rotate in **Project Settings → API Keys**, then update `src/docs/config.js`
+(publishable key - this is the one clients use) and the GitHub Actions secrets
+(service key). Leaking the *publishable* key is not an emergency: RLS limits
+it to read-only.
+
+**GitHub Pages shows a 404 or the README instead of the app.**
+Settings → Pages must be **Deploy from a branch** / `main` / folder `/`
+(root), and both root files must exist: `index.html` (redirects into
+`src/docs/`) and `.nojekyll` (serves files as-is).
 
 ## Notes
 

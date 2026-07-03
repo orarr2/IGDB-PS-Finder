@@ -12,8 +12,9 @@ Supabase dataset. The live web/iOS app is in [`../docs/`](../docs/).
 | `Launch Recommender.bat` | Double-click launcher on Windows |
 | `BUILD_EXE.md` | PyInstaller recipe for a standalone `.exe` |
 
-See the top-level [`README.md`](../README.md) for setup and environment
-variables.
+See the top-level [`README.md`](../../README.md) for setup, environment
+variables, architecture and troubleshooting - that's the source of truth;
+this file only covers running what's in this folder.
 
 ## Run
 
