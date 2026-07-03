@@ -132,7 +132,7 @@ re-rank so obscure shovelware can't outrank the games people actually play.
 
 1. Create a Supabase project (any region).
 2. In the SQL editor, run the files in [`src/migrations/`](src/migrations/)
-   **in order, `0000` → `0010`**. `0000_baseline.sql` creates everything from
+   **in order, `0000` → `0011`**. `0000_baseline.sql` creates everything from
    scratch - the `pg_trgm` and `vector` (pgvector) extensions, the `games`
    table, the vector tables, indexes, read-only RLS policies and the base RPC
    functions; the later files layer on the current recommendation engines.
@@ -177,10 +177,9 @@ below, then dispatch from the **Actions** tab:
    loads the `visual_neighbors` table via `src/ml/load_visual_neighbors.py`.
    Powers **Looks alike**.
 3. **Compute CLIP embeddings** - jina-clip-v1 (768-d) per-screenshot vectors,
-   committed as JSON under `src/ml/clip_embeddings/`. Powers **Hidden gems**
-   once upserted into the `game_clip_embeddings` table (there is no dedicated
-   loader script yet - adapt `load_visual_neighbors.py` or upsert via the SQL
-   editor).
+   committed as JSON under `src/ml/clip_embeddings/` and upserted into the
+   `game_clip_embeddings` table by `src/ml/load_clip_embeddings.py`. Powers
+   **Hidden gems**.
 
 Everything can also run locally: `pip install -r src/ml/requirements.txt` and
 run the same scripts with `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` in the
@@ -210,11 +209,11 @@ the `SUPABASE_SERVICE_KEY` repository secret (plus `TWITCH_CLIENT_ID` /
 | Collect IGDB & load into Supabase | manual | Refreshes the dataset: `collect_igdb.py` → `games.parquet` → upsert into `games` (updates rows, never deletes) |
 | Build CLIP (free / OSS) | manual | Embeds screenshots (512-d) into `game_clip_oss` - **photo search** |
 | Compute visual similarity | manual + push to its script | CNN embeddings → `visual_neighbors` table - **Looks alike** |
-| Compute CLIP embeddings | manual + push to its script | jina-clip-v1 vectors (768-d) committed to `src/ml/clip_embeddings/` - **Hidden gems** |
+| Compute CLIP embeddings | manual + push to its script | jina-clip-v1 vectors (768-d) committed to `src/ml/clip_embeddings/` and upserted into `game_clip_embeddings` - **Hidden gems** |
 | Rebuild CLIP v2 | manual | jina-clip-v2 (1024-d) re-embed via the edge-function proxy (needs Jina credit) |
 | Collect player media | manual + push to its script | Steam/Reddit player screenshots → `user_media` table |
 | Build Android APK | manual + push to `src/android/` | Wraps the live PWA into a TWA with Bubblewrap; APK as artifact |
-| Keep Supabase awake | every 2 days (cron) | Pings the Data API so the free-plan project never auto-pauses |
+| Keep Supabase awake | every 6 hours (cron) | Pings the Data API **and both vector RPCs** - keeps the project unpaused, keeps the ANN caches from going fully cold, and fails loudly if any user-facing path breaks |
 | Deploy app to GitHub Pages | manual | Fallback Actions-based Pages deploy. **Not the live method** - the site is served with "Deploy from a branch" (see below), and dispatching this changes the URL layout |
 
 ## Troubleshooting

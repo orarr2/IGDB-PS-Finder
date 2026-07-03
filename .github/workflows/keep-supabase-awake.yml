@@ -1,22 +1,25 @@
 name: Keep Supabase awake
 
 # Free-plan Supabase projects are paused automatically after ~7 days with no
-# activity. This job sends a tiny read request to the Data API on a schedule so
-# the project always counts as active and never pauses.
+# activity. This job used to send one tiny read; it now exercises the same
+# three paths a real user hits - plain table read, photo search, hidden gems -
+# so it doubles as an uptime canary AND keeps the HNSW indexes / TOASTed
+# vectors from going completely cold between visitors (the first vector query
+# on a cold cache takes seconds instead of milliseconds).
 #
-# It runs every 2 days (well inside the 7-day window, leaving margin for the
-# occasional run GitHub delays or skips). It can also be run manually from the
-# Actions tab. The job fails loudly if the project does not answer, so a real
-# outage is visible instead of silently letting the project sleep.
+# Runs every 6 hours (well inside the 7-day pause window). It can also be run
+# manually from the Actions tab. The job fails loudly if any endpoint does not
+# answer 200, so a real outage is visible instead of silently letting the
+# project sleep.
 #
 # The URL and key below are the PUBLIC anon credentials (the same ones shipped
-# in src/docs/config.js). Row-Level Security allows anonymous reads only, so they
-# are safe to keep here. To override them, set the SUPABASE_URL / SUPABASE_ANON_KEY
-# repository secrets.
+# in src/docs/config.js). Row-Level Security allows anonymous reads only, so
+# they are safe to keep here. To override them, set the SUPABASE_URL /
+# SUPABASE_ANON_KEY repository secrets.
 
 on:
   schedule:
-    - cron: "0 7 */2 * *"
+    - cron: "23 */6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -26,18 +29,41 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping the Data API
+      - name: Ping the Data API and warm the vector paths
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           URL="${SUPABASE_URL:-https://zttqvoqpwtxchxsglard.supabase.co}"
           KEY="${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0dHF2b3Fwd3R4Y2h4c2dsYXJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDk0NzQsImV4cCI6MjA5NjY4NTQ3NH0.CU2rcRgQtGcHmwY6thpf-NNKLnb-WtJzzj8WrzxO3Qo}"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" \
-            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
-            "$URL/rest/v1/games?select=id&limit=1")
-          echo "Data API responded with HTTP $code"
-          if [ "$code" != "200" ]; then
-            echo "::error::Supabase did not return 200 - project may be paused or down."
-            exit 1
-          fi
+
+          check () {  # check <label> <curl args...>
+            local label="$1"; shift
+            local t0=$(date +%s%3N)
+            local code=$(curl -sS -o /dev/null -w "%{http_code}" \
+              -H "apikey: $KEY" -H "Authorization: Bearer $KEY" "$@")
+            local ms=$(( $(date +%s%3N) - t0 ))
+            echo "$label -> HTTP $code in ${ms}ms"
+            if [ "$code" != "200" ]; then
+              echo "::error::$label returned HTTP $code - project may be paused or a function is broken."
+              exit 1
+            fi
+          }
+
+          check "games read" "$URL/rest/v1/games?select=id&limit=1"
+
+          # Neutral unit vector: result quality is irrelevant, the point is to
+          # walk the HNSW index + detoast the vectors (same work a photo does).
+          VEC=$(python3 -c "import math; print('['+','.join(['%.4f' % (1/math.sqrt(512))]*512)+']')")
+          check "photo search (match_games_by_clip_oss)" \
+            -X POST -H "Content-Type: application/json" \
+            --data "{\"query\":\"$VEC\",\"lim\":3}" \
+            "$URL/rest/v1/rpc/match_games_by_clip_oss"
+
+          # 19560 = God of War (2018); any game with screenshot embeddings works.
+          check "hidden gems (get_hidden_gems)" \
+            -X POST -H "Content-Type: application/json" \
+            --data '{"source_id":19560,"lim":3}' \
+            "$URL/rest/v1/rpc/get_hidden_gems"
+
+          echo "All three paths healthy."

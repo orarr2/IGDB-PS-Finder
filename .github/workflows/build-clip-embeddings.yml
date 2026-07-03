@@ -1,7 +1,9 @@
 name: Compute CLIP embeddings
 
-# Embeds every game's gameplay screenshots with CLIP (jina-clip-v1) and commits
-# the per-screenshot vectors (src/ml/clip_embeddings/) for semantic photo search.
+# Embeds every game's gameplay screenshots with CLIP (jina-clip-v1), commits
+# the per-screenshot vectors (src/ml/clip_embeddings/), and upserts them into
+# the game_clip_embeddings table that Hidden gems reads (needs the
+# SUPABASE_SERVICE_KEY repository secret; the load step is skipped without it).
 # Run: Actions → "Compute CLIP embeddings" → Run workflow.
 
 on:
@@ -23,6 +25,8 @@ jobs:
   compute:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    env:
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -51,6 +55,17 @@ jobs:
           git add src/ml/clip_embeddings
           git commit -m "Add CLIP screenshot embeddings [skip ci]" || { echo "no changes"; exit 0; }
           git push
+
+      - name: Load into game_clip_embeddings (Hidden gems data)
+        if: env.SUPABASE_SERVICE_KEY != ''
+        run: |
+          pip install --quiet "supabase>=2,<3"
+          export SUPABASE_URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' src/docs/config.js)
+          python src/ml/load_clip_embeddings.py
+
+      - name: Load skipped
+        if: env.SUPABASE_SERVICE_KEY == ''
+        run: echo "::warning::SUPABASE_SERVICE_KEY secret not set - vectors were committed but NOT loaded into the game_clip_embeddings table."
 
       - uses: actions/upload-artifact@v4
         with:

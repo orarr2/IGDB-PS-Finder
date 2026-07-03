@@ -5,7 +5,7 @@ order** - paste each file into the dashboard SQL editor (or run
 `supabase db push` with the CLI):
 
 ```
-0000 → 0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010
+0000 → 0001 → 0002 → ... → 0011   (just follow the numbers)
 ```
 
 On a **fresh project** start at `0000_baseline.sql`; the live production
@@ -25,6 +25,7 @@ files.
 | `0008_photo_search_vector_index.sql` | Adds the missing HNSW index on `game_clip_oss` (photo search seq-scanned ~19k vectors: 2.8s, over the anon timeout) and pins `hnsw.ef_search = 800` on the photo-search functions so the index returns the full candidate window. |
 | `0009_hidden_gems_ef_calibration.sql` | Recalibrates hidden gems to LIMIT 400 / `ef_search` 400 - at 1000 the planner fell back to a seq scan and timed out again. Documents two supautils/pgvector quirks. |
 | `0010_anon_statement_timeout.sql` | Raises the anon `statement_timeout` from 3s to 8s so the first cold-cache vector query after idle (~4s) succeeds; paired with a one-retry policy in the app. |
+| `0011_clip_embeddings_unique_pair.sql` | Adds `UNIQUE (game_id, shot_idx)` to `game_clip_embeddings` so `load_clip_embeddings.py` can upsert idempotently (parity with `game_clip_oss`). |
 
 ## Which function ends up where
 
