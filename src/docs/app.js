@@ -532,12 +532,15 @@
 
     var reasons = [];
     var isSimilar = arr(src.similar_games).map(String).indexOf(String(rec.id)) !== -1;
+    var sameSeries = (intersect(rec.collections, src.collections).length > 0) ||
+                     (intersect(rec.franchises, src.franchises).length > 0);
     var devs = intersect(rec.developers, src.developers);
     var genres = intersect(rec.genres, src.genres);
     var themes = intersect(rec.themes, src.themes);
     var modes = intersect(rec.game_modes, src.game_modes);
 
-    if (isSimilar) reasons.push("IGDB lists it as a game <b>directly similar to " + esc(src.name) + "</b> - the strongest possible signal.");
+    if (sameSeries) reasons.push("Same series: it shares a franchise or collection with <b>" + esc(src.name) + "</b> - the strongest signal we have.");
+    if (isSimilar) reasons.push("IGDB lists it as a game <b>directly similar to " + esc(src.name) + "</b>.");
     if (devs.length) reasons.push("Same studio: both come from <b>" + esc(listText(devs, 2)) + "</b>.");
     if (genres.length) reasons.push("Shared genres you liked: <b>" + esc(listText(genres, 3)) + "</b>.");
     if (themes.length) reasons.push("Overlapping themes: <b>" + esc(listText(themes, 3)) + "</b>.");
@@ -551,8 +554,10 @@
     panel.appendChild(ul);
 
     var note = el("p", "why-note");
-    note.innerHTML = "How scoring works: a directly-similar game is worth <b>+1000</b>, each shared developer <b>+15</b>, " +
-      "each shared genre <b>+10</b>, theme <b>+5</b>, play-mode <b>+3</b>, plus a small bump for rating. " +
+    note.innerHTML = "How scoring works: <b>same-series</b> and <b>same-studio</b> games lead the list, and an " +
+      "IGDB-curated “similar” pick only counts when it also shares the studio or series. Shared genres, " +
+      "themes and play-modes add smaller points, well-rated and widely-reviewed games get a nudge up, and " +
+      "nothing rated below 55 ever makes the list. " +
       "The top " + REC_COUNT + " by score become your recommendations.";
     panel.appendChild(note);
     return panel;

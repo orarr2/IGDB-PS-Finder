@@ -1,28 +1,45 @@
-# PlayStation Game Recommender - iPhone & Android app
+# PS Finder - the web / iPhone / Android app
 
-This folder is a complete, installable **mobile app** (a Progressive Web App).
+This folder is the live app - a complete, installable **Progressive Web App**.
 It installs to your Home Screen with its own icon, runs full-screen with no
 browser chrome, and works offline for the shell.
 
 It gives **real results**: it calls the same live Supabase backend the desktop
-app uses - the 3,840 PS4/PS5 games collected by `igdb_data_collection.ipynb` -
-through the `search_games` and `get_recommendations` database functions. Cover
-art and screenshots are streamed from the IGDB CDN.
+app uses - **7,000+ PS1-PS5 games** collected by
+`src/desktop_app/collect_igdb.py` - through the `search_games`,
+`get_recommendations`, `get_visual_recommendations`, `get_hidden_gems` and
+`match_games_by_clip_oss` database functions. Cover art and screenshots are
+streamed from the IGDB CDN.
 
 ### What it does
+
 - **Type-ahead search** - suggestions appear as you type ("God of…" → all the
   God of War games, etc.).
-- **Detail screen** - cover, rating, studio, genres/themes, summary, and a
-  **screenshot gallery** (tap any shot for a full-quality, swipeable lightbox).
-- **12 recommendations** - **press & hold** a card to peek at in-game
-  screenshots; tap to open it.
-- **"Why we picked this for you"** - on a recommended game, an explanation panel
-  shows the exact reasons (shared studio / genres / themes / direct-similarity)
-  and how the engine scores them.
+- **Search by a photo** - upload any screenshot or photo; a CLIP model runs
+  **on your device** (transformers.js - the image never leaves the phone) and
+  the backend matches its embedding against ~19,000 gameplay-screenshot
+  vectors. The closest-looking games come back as results.
+- **Detail screen** - cover, rating, studio, genres/themes, summary, a
+  **screenshot gallery** (tap any shot for a full-quality, swipeable lightbox)
+  and player-captured shots where available.
+- **Three recommendation tabs**, 12 games each:
+  - **Smart** - metadata engine: same series and studio lead, then genres,
+    themes, quality and popularity.
+  - **Looks alike** - computer vision on real gameplay screenshots.
+  - **Hidden gems** - looks and feels like your pick, but with fewer than 25
+    reviews.
+  Press & hold a card to peek at its in-game screenshots; tap to open it.
+- **"Why we picked this for you"** - on a recommended game, an explanation
+  panel shows a match % and the exact reasons (same series / studio / genres /
+  themes / IGDB-similar).
+- **Upcoming** - the most-anticipated titles plus everything releasing in the
+  next three months.
+- **My List** - save games for later.
 - **Share** the list via the native share sheet.
 
 ```
-Type a game you love → details + screenshots → 12 recommendations (with "why") → share
+Type a game you love (or upload a photo) → details + screenshots
+      → Smart / Looks alike / Hidden gems (12 each, with "why") → share
 ```
 
 No App Store, no Mac, no Xcode required.
@@ -33,22 +50,27 @@ No App Store, no Mac, no Xcode required.
 
 ### Option A - GitHub Pages (recommended, nothing to keep running)
 
-This app lives in the `docs/` folder so GitHub Pages can serve it with the
-simple **"Deploy from a branch"** method - no Actions workflow needed.
+This is how the live site is served today.
 
 1. Make the repo **public** (Pages on a private repo needs a paid plan).
 2. In the repo: **Settings → Pages → Build and deployment**:
    - **Source:** _Deploy from a branch_
-   - **Branch:** the branch this app is on → **Folder: `/docs`** → **Save**.
-3. Wait ~1 minute. Pages shows a URL like
+   - **Branch:** `main` → **Folder: `/` (root)** → **Save**.
+3. The repo's root `index.html` redirects the canonical URL into this folder
+   (`src/docs/`), and the root `.nojekyll` tells Pages to serve the files
+   as-is. Wait ~1 minute; Pages shows a URL like
    `https://<your-username>.github.io/<repo>/`.
 4. On your **iPhone**, open that URL in **Safari**.
 5. Tap the **Share** button → **Add to Home Screen** → **Add**.
 6. Launch it from the new Home-Screen icon. It now runs like a native app.
 
 > HTTPS (which Pages provides) is required for Home-Screen install. Use Safari -
-> Chrome/Firefox on iOS can open the app but can't install it to the Home Screen.
-> The `.nojekyll` file in this folder tells Pages to serve the files as-is.
+> Chrome/Firefox on iOS can open the app but can't install it to the Home
+> Screen.
+>
+> There is also a `deploy-pages.yml` workflow that can publish this folder via
+> GitHub Actions instead - but it serves `src/docs/` as the site **root**,
+> which changes every URL. The branch method above is the one this repo uses.
 
 ### Option B - From your computer over Wi-Fi (quick test)
 
@@ -96,15 +118,18 @@ in real Chrome, **screenshots and cover art are full quality**.
 
 ## How to use it / what to "ask" it
 
-- Start typing a game you love (e.g. **God of War**, **Elden Ring**) - pick from
-  the suggestions that appear.
+- Start typing a game you love (e.g. **God of War**, **Elden Ring**) - pick
+  from the suggestions - or upload a **photo/screenshot** and let the closest
+  visual match seed everything.
 - See its rating, studio, genres/themes, summary and screenshots (tap a shot to
   enlarge).
-- Tap **See 12 recommendations** - the engine finds the most similar PS4/PS5
-  games. Press & hold any card to peek at its screenshots.
+- Tap **See 12 recommendations**, then switch between the **Smart**,
+  **Looks alike** and **Hidden gems** tabs. Press & hold any card to peek at
+  its screenshots.
 - Tap a recommendation to open it; the **"Why we picked this"** panel explains
   the match. Recommend again from there to keep exploring.
-- Tap **Share** to send the list via the native share sheet.
+- Check **Upcoming** for what's next, keep favourites in **My List**, and tap
+  **Share** to send the list via the native share sheet.
 
 ## What's in here
 
@@ -112,18 +137,19 @@ in real Chrome, **screenshots and cover art are full quality**.
 |---|---|
 | `index.html` | App shell / screens + gallery & lightbox markup |
 | `styles.css` | Mobile-first PlayStation theme, iPhone safe-area aware |
-| `app.js` | Autocomplete, detail, gallery, why-panel, recommendations |
+| `app.js` | Autocomplete, detail, tabs, photo search, why-panel, My List |
 | `config.js` | Public Supabase URL + publishable (anon) key |
 | `manifest.webmanifest` | Makes it an installable app (name, icons, colors) |
 | `sw.js` | Service worker - installability + offline shell + cover cache |
 | `icons/` | Home-screen app icons |
+| `models/` | ONNX copy of the vision model, committed by CI |
 | `test/` | Headless verification of the full flow (`npm test`) |
 
 ## The key is safe to ship
 
 `config.js` holds the Supabase **publishable / anon** key. It's designed to live
-in clients: Row-Level Security on the `games` table allows anonymous **reads
-only**, so the key cannot change or delete any data.
+in clients: Row-Level Security allows anonymous **reads only** on every table,
+so the key cannot change or delete any data.
 
 ## Verify it yourself
 

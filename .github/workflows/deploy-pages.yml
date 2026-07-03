@@ -2,19 +2,15 @@ name: Deploy app to GitHub Pages
 
 # Publishes the PWA in src/docs/ to GitHub Pages.
 #
-# Using the GitHub Actions deployment method (instead of "Deploy from a branch")
-# means Pages is enabled automatically on the first run -- no need to touch
-# Settings -> Pages by hand. `enablement: true` on configure-pages creates the
-# Pages site if it does not exist yet, which fixes the "There isn't a GitHub
-# Pages site here" 404.
+# MANUAL-ONLY FALLBACK. The live site is served the other way: Settings ->
+# Pages is set to "Deploy from a branch" (main, folder /), the root index.html
+# redirects the canonical URL into src/docs/, and the root .nojekyll makes
+# Pages serve files as-is. Dispatching THIS workflow instead serves src/docs/
+# as the site ROOT, which changes every URL - installed home-screen apps
+# pointing at /IGDB-PS-Finder/src/docs/ would break. Keep it manual so a
+# routine push to src/docs/ can never flip the live URL layout by accident.
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "src/docs/**"
-      - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
 # Required for the Pages deployment + OIDC token used by deploy-pages.

@@ -8,7 +8,7 @@ Supabase dataset. The live web/iOS app is in [`../docs/`](../docs/).
 | `app.py` | PyQt6 desktop app - Home / Detail / Recommendations |
 | `collect_igdb.py` | Pulls PlayStation metadata from IGDB into `games.parquet` |
 | `load_to_supabase.py` | Idempotent upsert of `games.parquet` into `public.games` |
-| `igdb_data_collection.ipynb` | Original notebook (also downloads cover/screenshot images) |
+| `igdb_data_collection.ipynb` | Legacy notebook, kept for reference only - it predates IGDB's `category` → `game_type` API change and no longer runs as-is; use `collect_igdb.py` |
 | `Launch Recommender.bat` | Double-click launcher on Windows |
 | `BUILD_EXE.md` | PyInstaller recipe for a standalone `.exe` |
 
