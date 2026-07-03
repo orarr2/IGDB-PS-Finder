@@ -21,6 +21,7 @@ on:
     branches: [main]
     paths:
       - "src/ml/clip_embeddings.py"
+      - "src/ml/load_clip_embeddings.py"
       - ".github/workflows/build-clip-embeddings.yml"
 
 permissions:
