@@ -1000,16 +1000,18 @@
     host.hidden = false;
   }
 
-  // Keep the "games" stat on the home accurate (live total from the DB).
-  function updateGameCount() {
-    var node = $("#stat-games"); if (!node) return;
-    var h = headers(); h.Prefer = "count=exact";
-    fetch(URL_BASE + "/rest/v1/games?select=id&limit=1", { headers: h })
-      .then(function (r) {
-        var cr = r.headers.get("content-range"); // e.g. "0-0/7085"
-        var total = cr && cr.split("/")[1];
-        if (total && total !== "*") node.textContent = Number(total).toLocaleString();
-      }).catch(function () {});
+  // Keep the home "ABOUT THE DATA" block accurate - all four numbers come
+  // from one get_stats round-trip. The markup keeps a recent snapshot as the
+  // offline fallback.
+  function updateStats() {
+    rpc("get_stats", {}).then(function (rows) {
+      var s = rows && rows[0]; if (!s) return;
+      var put = function (id, txt) { var n = $("#" + id); if (n && txt) n.textContent = txt; };
+      put("stat-games", Number(s.games).toLocaleString());
+      if (s.min_year && s.max_year) put("stat-years", s.min_year + "-" + s.max_year);
+      put("stat-upcoming", Number(s.upcoming).toLocaleString());
+      put("stat-photo", Number(s.photo_searchable).toLocaleString());
+    }).catch(function () {});
   }
 
   // ============================================================ UPCOMING (□ on home)
@@ -1152,7 +1154,7 @@
     var ml = $("#mylist-btn"); if (ml) ml.addEventListener("click", openSavedList);
     var up = $("#upcoming-btn"); if (up) up.addEventListener("click", openUpcoming);
     buildHomeDemo();
-    updateGameCount();
+    updateStats();
 
     // the press-and-hold preview must never get stuck on screen
     document.addEventListener("pointerup", hidePreview, true);
