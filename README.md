@@ -212,7 +212,6 @@ the `SUPABASE_SERVICE_KEY` repository secret (plus `TWITCH_CLIENT_ID` /
 | Build CLIP (free / OSS) | manual | Embeds screenshots (512-d) into `game_clip_oss` - **photo search** |
 | Compute visual similarity | manual + push to its script | CNN embeddings → `visual_neighbors` table - **Looks alike** |
 | Compute CLIP embeddings | manual + push to its script (self-chains) | jina-clip-v1 vectors (768-d) committed to `src/ml/clip_embeddings/` and upserted into `game_clip_embeddings` - **Hidden gems**. Embeds only uncovered games and re-dispatches itself until the catalog is done |
-| Rebuild CLIP v2 | manual | jina-clip-v2 (1024-d) re-embed via the edge-function proxy (needs Jina credit) |
 | Collect player media | manual + push to its script | Steam/Reddit player screenshots → `user_media` table |
 | Build Android APK | manual + push to `src/android/` | Wraps the live PWA into a TWA with Bubblewrap; APK as artifact |
 | Keep Supabase awake | every 6 hours (cron) | Pings the Data API **and both vector RPCs** - keeps the project unpaused, keeps the ANN caches from going fully cold, and fails loudly if any user-facing path breaks |
