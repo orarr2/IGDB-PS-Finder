@@ -750,8 +750,9 @@
     // tuned scoring - re-sorting client-side used to override that with a
     // simpler formula and hid the impact of any migration tweak. We still
     // compute _match so the badge % has something to show; it just doesn't
-    // reorder the grid.
-    if (mode !== "gems") {
+    // reorder the grid. Only smart/visual show the % badge - gems shows a
+    // rating and photo shows a rating, neither needs matchInfo.
+    if (mode === "smart" || mode === "visual") {
       recs.forEach(function (g) { g._match = matchInfo(g, sourceGame, mode); });
     }
     recs.forEach(function (g) {
