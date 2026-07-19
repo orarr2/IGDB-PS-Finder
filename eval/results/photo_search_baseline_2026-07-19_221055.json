@@ -1,0 +1,53 @@
+{
+  "failures": {
+    "download": 0,
+    "embed": 0,
+    "empty_result": 0
+  },
+  "genre_coherence_top5": {
+    "ci_hi": 0.9197,
+    "ci_lo": 0.8642,
+    "mean": 0.8943
+  },
+  "latency_ms": {
+    "p50": 273.5,
+    "p95": 1098.5,
+    "p99": 5113.6
+  },
+  "meta": {
+    "actual_evaluated": 300,
+    "held_out_shot": 3,
+    "label": "baseline",
+    "sample_size": 300,
+    "seed": 20260719,
+    "timestamp": "2026-07-19 22:10:49",
+    "top_k": 20
+  },
+  "mrr": {
+    "ci_hi": 0.1464,
+    "ci_lo": 0.0846,
+    "mean": 0.1135
+  },
+  "recall": {
+    "at_1": {
+      "ci_hi": 0.1,
+      "ci_lo": 0.04,
+      "mean": 0.0667
+    },
+    "at_10": {
+      "ci_hi": 0.29,
+      "ci_lo": 0.1933,
+      "mean": 0.24
+    },
+    "at_20": {
+      "ci_hi": 0.3533,
+      "ci_lo": 0.2467,
+      "mean": 0.3
+    },
+    "at_5": {
+      "ci_hi": 0.2,
+      "ci_lo": 0.1167,
+      "mean": 0.1567
+    }
+  }
+}
