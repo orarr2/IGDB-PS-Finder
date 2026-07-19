@@ -1,13 +1,21 @@
 /*
  * Service worker - makes the app installable and lets the shell load offline.
  * Strategy:
- *   - App shell (HTML/CSS/JS/icons): cache-first, so the app opens instantly
- *     and works with no connection (data calls still need the network).
- *   - Everything else (Supabase API, IGDB cover images): network-first with a
- *     runtime cache fallback, so previously seen covers survive offline.
+ *   - App shell (HTML/CSS/JS/icons): network-first with cache fallback, so
+ *     users always get the latest build online but can still open the app
+ *     offline. index.html is the offline fallback for any same-origin miss.
+ *   - IGDB image CDN (images.igdb.com/.../<image_id>.jpg): cache-first with
+ *     an LRU cap. Every URL is content-addressed by IGDB's image_id, so a
+ *     cached copy is always fresh - hitting the network is pure waste.
+ *   - Everything else (Supabase API, transformers.js model, fonts): straight
+ *     to network - the browser HTTP cache handles those and we do not want
+ *     to serve stale RPC data.
+ * Bump the version numbers below to invalidate all caches on the next SW
+ * install.
  */
-var SHELL = "ps-recommender-shell-v22";
-var RUNTIME = "ps-recommender-runtime-v22";
+var SHELL = "ps-recommender-shell-v23";
+var RUNTIME = "ps-recommender-runtime-v23";
+var RUNTIME_MAX_ENTRIES = 150; // ~150 cover/screenshot thumbnails (< 20 MB)
 
 var SHELL_ASSETS = [
   "./",
@@ -20,6 +28,7 @@ var SHELL_ASSETS = [
   "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  "./icons/icon-512-maskable.png",
 ];
 
 self.addEventListener("install", function (e) {
@@ -39,17 +48,27 @@ self.addEventListener("activate", function (e) {
   );
 });
 
+// Best-effort LRU trim: caches don't expose access-time, so we just keep
+// the cache from growing without bound by dropping the oldest keys once
+// we cross the ceiling. Called after each RUNTIME put.
+function trimRuntime() {
+  caches.open(RUNTIME).then(function (c) {
+    c.keys().then(function (keys) {
+      var excess = keys.length - RUNTIME_MAX_ENTRIES;
+      if (excess <= 0) return;
+      for (var i = 0; i < excess; i++) c.delete(keys[i]);
+    });
+  });
+}
+
 self.addEventListener("fetch", function (e) {
   var req = e.request;
   if (req.method !== "GET") return;
 
   var url = new URL(req.url);
-  var isShell = url.origin === self.location.origin &&
-    SHELL_ASSETS.indexOf("." + url.pathname.replace(self.registration.scope.replace(self.location.origin, ""), "/")) !== -1;
 
-  // Same-origin shell → network-first (fall back to cache offline). This keeps
-  // the app from getting stuck on a stale cached build: when online, users
-  // always get the latest HTML/JS/CSS; when offline, the cached shell loads.
+  // Same-origin (the shell): network-first, cache fallback, index.html
+  // as the last-resort offline shell.
   if (url.origin === self.location.origin) {
     e.respondWith(
       fetch(req).then(function (res) {
@@ -63,16 +82,24 @@ self.addEventListener("fetch", function (e) {
     return;
   }
 
-  // Cover images → cache them after first view (network-first).
+  // IGDB image CDN: cache-first (URLs are content-addressed, never change).
+  // Saves one network round-trip per cover/screenshot after the first view.
   if (url.hostname.indexOf("images.igdb.com") !== -1) {
     e.respondWith(
-      fetch(req).then(function (res) {
-        var copy = res.clone();
-        caches.open(RUNTIME).then(function (c) { c.put(req, copy); });
-        return res;
-      }).catch(function () { return caches.match(req); })
+      caches.match(req).then(function (hit) {
+        if (hit) return hit;
+        return fetch(req).then(function (res) {
+          if (res.ok) {
+            var copy = res.clone();
+            caches.open(RUNTIME).then(function (c) {
+              c.put(req, copy).then(trimRuntime);
+            });
+          }
+          return res;
+        }).catch(function () { return caches.match(req); });
+      })
     );
     return;
   }
-  // Supabase API and anything else → straight to network.
+  // Supabase API, transformers.js CDN, fonts, everything else -> network.
 });

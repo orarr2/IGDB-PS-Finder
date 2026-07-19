@@ -625,7 +625,9 @@
 
   function setActiveSeg(mode) {
     document.querySelectorAll("#rec-mode .seg").forEach(function (b) {
-      b.classList.toggle("active", b.getAttribute("data-mode") === mode);
+      var on = b.getAttribute("data-mode") === mode;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
     });
   }
 
@@ -697,6 +699,11 @@
 
   function recCard(g, mode) {
     var card = el("div", "card");
+    // Make cards keyboard-navigable: they're clickable, so they should be
+    // focusable and answer to Enter/Space like a button.
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", g.name + (g.release_year ? " (" + g.release_year + ")" : ""));
     var cover = coverEl(g, "cover_big", 160, 226);
     if (mode === "series") {
       cover.appendChild(el("div", "match-badge series", "Series"));
@@ -771,9 +778,24 @@
       if (held) { held = false; return; } // the hold already showed a preview
       openDetail(game, sourceGame, currentMode);
     });
-    // Desktop hover convenience
-    card.addEventListener("mouseenter", function () { showPreview(game); });
-    card.addEventListener("mouseleave", function () { hidePreview(); });
+    card.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openDetail(game, sourceGame, currentMode);
+      }
+    });
+    // Desktop hover convenience - debounced so a fast sweep across the grid
+    // does not fire N * 4 screenshot requests. The 200 ms delay is well below
+    // a deliberate hover (typically > 500 ms) but well above a sweep.
+    var hoverT = null;
+    card.addEventListener("mouseenter", function () {
+      clearTimeout(hoverT);
+      hoverT = setTimeout(function () { showPreview(game); }, 200);
+    });
+    card.addEventListener("mouseleave", function () {
+      clearTimeout(hoverT);
+      hidePreview();
+    });
   }
 
   var previewTimer = null;
@@ -961,44 +983,59 @@
   }
 
   // ============================================================ HOME DEMO
-  // A "how it works" gallery at the bottom of home, built from REAL cover art:
-  // because you loved God of War → its actual top matches. Tapping it runs the
-  // real recommendation flow for God of War.
+  // "See it in action" gallery: because you loved God of War -> its actual
+  // top visual matches, fetched live from the same RPC users hit when they
+  // open the Looks Alike tab. Percentages are derived from real cosine
+  // scores in visual_neighbors, not hardcoded. Tapping it opens GoW so the
+  // user sees the full flow.
+  var DEMO_SRC_ID = 19560; // God of War (2018)
   function buildHomeDemo() {
     var host = $("#home-demo");
     if (!host) return;
-    var GOW = { id: 19560, name: "God of War", cover_id: "cobkt6" };
-    var matches = [
-      { id: 75235, name: "Ghost of Tsushima", cover_id: "co2crj", pct: 96 },
-      { id: 112875, name: "God of War Ragnarök", cover_id: "coba3d", pct: 94 },
-      { id: 119133, name: "Elden Ring", cover_id: "co4jni", pct: 91 },
-      { id: 11156, name: "Horizon Zero Dawn", cover_id: "co2una", pct: 90 },
-      { id: 25076, name: "Red Dead Redemption 2", cover_id: "co1q1f", pct: 88 },
-    ];
     host.innerHTML = "";
     host.appendChild(el("div", "howto-h", "SEE IT IN ACTION"));
 
-    var card = el("button", "demo"); card.type = "button";
-    var top = el("div", "demo-top");
-    var src = coverEl(GOW, "cover_small", 90, 128); src.classList.add("demo-src");
-    top.appendChild(src);
-    var because = el("div", "demo-because");
-    because.innerHTML = "Because you loved <b>God of War</b><span>Tap to see real matches →</span>";
-    top.appendChild(because);
-    card.appendChild(top);
+    Promise.all([
+      getGame(DEMO_SRC_ID),
+      rpc("get_visual_recommendations", { source_id: DEMO_SRC_ID, lim: 5 }),
+      restGet(URL_BASE + "/rest/v1/visual_neighbors?game_id=eq." + DEMO_SRC_ID +
+              "&select=neighbor_ids,scores&limit=1").then(checkJson).catch(function () { return []; }),
+    ]).then(function (res) {
+      var src = res[0], matches = res[1] || [], vnRow = (res[2] && res[2][0]) || {};
+      if (!src || !matches.length) { host.hidden = true; return; }
 
-    var row = el("div", "demo-row");
-    matches.forEach(function (m) {
-      var cell = el("div", "demo-cell");
-      var cv = coverEl(m, "cover_small", 90, 128);
-      cv.appendChild(el("div", "match-badge " + (m.pct >= 75 ? "hi" : "mid"), m.pct + "%"));
-      cell.appendChild(cv);
-      row.appendChild(cell);
-    });
-    card.appendChild(row);
-    card.addEventListener("click", function () { openPick(GOW.id); });
-    host.appendChild(card);
-    host.hidden = false;
+      // Map neighbor_id -> cosine so we can label real percentages.
+      var cosById = {};
+      var ids = vnRow.neighbor_ids || [], scores = vnRow.scores || [];
+      for (var i = 0; i < ids.length; i++) cosById[String(ids[i])] = scores[i];
+
+      var card = el("button", "demo"); card.type = "button";
+      var top = el("div", "demo-top");
+      var srcCover = coverEl(src, "cover_small", 90, 128); srcCover.classList.add("demo-src");
+      top.appendChild(srcCover);
+      var because = el("div", "demo-because");
+      because.innerHTML = "Because you loved <b>" + esc(src.name) +
+        "</b><span>Tap to see real matches &rarr;</span>";
+      top.appendChild(because);
+      card.appendChild(top);
+
+      var row = el("div", "demo-row");
+      matches.forEach(function (m) {
+        var cell = el("div", "demo-cell");
+        var cv = coverEl(m, "cover_small", 90, 128);
+        var cos = cosById[String(m.id)];
+        if (typeof cos === "number") {
+          var pct = Math.round(clamp((cos - 0.5) / 0.45, 0, 1) * 100);
+          cv.appendChild(el("div", "match-badge " + (pct >= 75 ? "hi" : "mid"), pct + "%"));
+        }
+        cell.appendChild(cv);
+        row.appendChild(cell);
+      });
+      card.appendChild(row);
+      card.addEventListener("click", function () { openPick(DEMO_SRC_ID); });
+      host.appendChild(card);
+      host.hidden = false;
+    }).catch(function () { host.hidden = true; });
   }
 
   // Keep the home "ABOUT THE DATA" block accurate - all four numbers come

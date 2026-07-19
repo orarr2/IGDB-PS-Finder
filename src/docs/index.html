@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>PS Finder</title>
   <meta name="description" content="Tell it a PS4/PS5 game you love and get recommendations with cover art, ratings, screenshots, and why each was picked for you." />
 
@@ -96,11 +96,10 @@
         </div>
       </header>
       <div id="rec-source" class="rec-source" hidden></div>
-      <h2 id="recs-heading" class="recs-heading" hidden></h2>
-      <div class="segmented" id="rec-mode">
-        <button type="button" class="seg active" data-mode="smart">Smart</button>
-        <button type="button" class="seg" data-mode="visual">Looks alike</button>
-        <button type="button" class="seg" data-mode="gems">Hidden gems</button>
+      <div class="segmented" id="rec-mode" role="tablist" aria-label="Recommendation modes">
+        <button type="button" class="seg active" data-mode="smart" role="tab" aria-selected="true"  aria-controls="recs-grid">Smart</button>
+        <button type="button" class="seg"        data-mode="visual" role="tab" aria-selected="false" aria-controls="recs-grid">Looks alike</button>
+        <button type="button" class="seg"        data-mode="gems"   role="tab" aria-selected="false" aria-controls="recs-grid">Hidden gems</button>
       </div>
       <p class="recs-sub">Press &amp; hold a game to peek at in-game screenshots · tap to open</p>
       <div id="upcoming-search" class="upcoming-search" hidden></div>
