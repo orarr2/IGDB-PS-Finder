@@ -738,13 +738,14 @@
       grid.appendChild(el("div", "grid-label", "More games like it"));
     }
 
-    // Score & sort by the active mode's own signal, strictly high → low.
+    // Trust the server order. The Postgres RPCs (get_recommendations,
+    // get_visual_recommendations, get_hidden_gems) already rank by their
+    // tuned scoring - re-sorting client-side used to override that with a
+    // simpler formula and hid the impact of any migration tweak. We still
+    // compute _match so the badge % has something to show; it just doesn't
+    // reorder the grid.
     if (mode !== "gems") {
       recs.forEach(function (g) { g._match = matchInfo(g, sourceGame, mode); });
-      recs.sort(function (a, b) { return b._match.pct - a._match.pct; });
-    } else {
-      // Hidden gems show a ★ rating - order them by it, high → low.
-      recs.sort(function (a, b) { return (parseFloat(b.total_rating) || 0) - (parseFloat(a.total_rating) || 0); });
     }
     recs.forEach(function (g) {
       if (inSeries[g.id]) return; // already shown above

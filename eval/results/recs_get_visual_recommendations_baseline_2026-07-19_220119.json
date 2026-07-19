@@ -1,0 +1,31 @@
+{
+  "latency_ms": {
+    "p50": 230.5,
+    "p95": 347.1
+  },
+  "meta": {
+    "actual_evaluated": 299,
+    "label": "baseline",
+    "rpc": "get_visual_recommendations",
+    "sample_size": 300,
+    "seed": 20260719,
+    "skipped_no_ground_truth": 1,
+    "timestamp": "2026-07-19 22:01:11",
+    "top_k": 12
+  },
+  "mrr": {
+    "ci_hi": 0.2103,
+    "ci_lo": 0.1397,
+    "mean": 0.1741
+  },
+  "ndcg_at_12": {
+    "ci_hi": 0.0991,
+    "ci_lo": 0.0654,
+    "mean": 0.0817
+  },
+  "recall_at_12": {
+    "ci_hi": 0.0911,
+    "ci_lo": 0.0597,
+    "mean": 0.0749
+  }
+}

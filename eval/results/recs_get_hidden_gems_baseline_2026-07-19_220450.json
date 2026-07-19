@@ -1,0 +1,31 @@
+{
+  "latency_ms": {
+    "p50": 371.5,
+    "p95": 1644.3
+  },
+  "meta": {
+    "actual_evaluated": 299,
+    "label": "baseline",
+    "rpc": "get_hidden_gems",
+    "sample_size": 300,
+    "seed": 20260719,
+    "skipped_no_ground_truth": 1,
+    "timestamp": "2026-07-19 22:04:49",
+    "top_k": 12
+  },
+  "mrr": {
+    "ci_hi": 0.1848,
+    "ci_lo": 0.1198,
+    "mean": 0.1516
+  },
+  "ndcg_at_12": {
+    "ci_hi": 0.0863,
+    "ci_lo": 0.055,
+    "mean": 0.0697
+  },
+  "recall_at_12": {
+    "ci_hi": 0.076,
+    "ci_lo": 0.0487,
+    "mean": 0.0615
+  }
+}
