@@ -23,13 +23,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # heartbeat commit resets the 60-day inactivity clock
+  contents: read
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: Ping the Data API and warm the vector paths
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -68,27 +67,3 @@ jobs:
             "$URL/rest/v1/rpc/get_hidden_gems"
 
           echo "All three paths healthy."
-
-      - name: Bump HEARTBEAT.md when it is older than 20 days
-        # GitHub Actions auto-disables scheduled workflows after 60 days of
-        # repo inactivity (no commits). That would silently disable THIS
-        # workflow and let the Supabase project pause. Committing every 20
-        # days keeps the clock reset without spamming history with 4
-        # commits/day.
-        run: |
-          FILE=HEARTBEAT.md
-          MAX_AGE_SECS=$((20*24*60*60))
-          if [ -f "$FILE" ]; then
-            LAST=$(git log -1 --format=%ct -- "$FILE" 2>/dev/null || echo 0)
-            AGE=$(( $(date +%s) - LAST ))
-            if [ "$AGE" -lt "$MAX_AGE_SECS" ]; then
-              echo "HEARTBEAT.md is $((AGE/86400))d old; no bump needed."
-              exit 0
-            fi
-          fi
-          printf '# Repository heartbeat\n\nLast verified: %s\n\nThis file is bumped by `.github/workflows/keep-supabase-awake.yml` about\nonce every 20 days. It exists only so the repository never crosses\nGitHub Actions'"'"' 60-day inactivity threshold, which auto-disables all\nscheduled workflows (including keep-supabase-awake itself, which would\nthen let the Supabase project pause). Ignore its contents in reviews.\n' "$(date -u +%FT%RZ)" > "$FILE"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$FILE"
-          git commit -m "Bump heartbeat (keeps GitHub Actions 60-day clock reset)"
-          git push
